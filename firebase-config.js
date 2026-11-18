@@ -1,5 +1,5 @@
-window.FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCB347V06ZNqCqwUMhhmuIm05Q7aagxzHE",
+window.firebaseConfig = {
+  apiKey: "AIzaSyCB347V06ZNqCqwUMhhmulm05Q7aagxzHE",
   authDomain: "daily-income-tracking.firebaseapp.com",
   projectId: "daily-income-tracking",
   storageBucket: "daily-income-tracking.firebasestorage.app",

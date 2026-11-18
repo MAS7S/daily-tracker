@@ -1,5 +1,5 @@
 // Change VERSION for every release, including firebase-config.js changes.
-const VERSION = "2026-11-18.1";
+const VERSION = "2026-11-18.stores.1";
 const SCOPE = self.registration.scope;
 const PREFIX = "daily-tracker/" + SCOPE + "/";
 const CACHE = PREFIX + VERSION;

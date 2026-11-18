@@ -1,19 +1,44 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{uid}/ledgers/main {
-      function owner() { return request.auth != null && request.auth.uid == uid; }
-      allow read: if owner();
-      allow create, update: if owner()
-        && request.resource.data.keys().hasOnly(['revision','parts'])
-        && request.resource.data.revision is string
-        && request.resource.data.parts is int
-        && request.resource.data.parts >= 1 && request.resource.data.parts <= 160;
-      match /parts/{part} {
-        allow read, delete: if owner();
-        allow create, update: if owner()
-          && request.resource.data.keys().hasOnly(['text','revision'])
-          && request.resource.data.text is string && request.resource.data.revision is string;
+    function verified() {
+      return request.auth != null && request.auth.token.email_verified == true
+        && request.auth.token.email is string;
+    }
+    function email() { return request.auth.token.email.lower(); }
+    function admin() { return verified() && email() == 'malekshahbien@gmail.com'; }
+    function assigned(id) {
+      let grant = get(/databases/$(database)/documents/access/$(email())).data;
+      return grant.active == true && grant.storeId == id;
+    }
+    function accessStore(id) { return admin() || (verified() && assigned(id)); }
+    match /access/{address} {
+      allow get: if admin() || (verified() && email() == address);
+      allow list: if admin();
+      allow create, update: if admin() && address == address.lower()
+        && request.resource.data.keys().hasOnly(['active','storeId'])
+        && request.resource.data.active is bool && request.resource.data.storeId is string
+        && getAfter(/databases/$(database)/documents/restaurants/$(request.resource.data.storeId)).data.name is string;
+      allow delete: if admin();
+    }
+    match /restaurants/{id} {
+      allow get: if accessStore(id);
+      allow list: if admin();
+      allow create, update: if admin() && request.resource.data.keys().hasOnly(['name','ownerEmail'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100 && request.resource.data.ownerEmail is string;
+      match /ledgers/main {
+        allow read: if accessStore(id);
+        allow create, update: if accessStore(id)
+          && request.resource.data.keys().hasOnly(['revision','parts'])
+          && request.resource.data.revision is string && request.resource.data.parts is int
+          && request.resource.data.parts >= 1 && request.resource.data.parts <= 160;
+        match /parts/{part} {
+          allow read, delete: if accessStore(id);
+          allow create, update: if accessStore(id)
+            && request.resource.data.keys().hasOnly(['text','revision'])
+            && request.resource.data.text is string && request.resource.data.revision is string;
+        }
       }
     }
   }

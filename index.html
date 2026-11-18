@@ -17,7 +17,7 @@
 *{box-sizing:border-box}body{margin:0;background:#f1f7f4;color:#12372b;font:16px/1.55 system-ui,sans-serif;min-height:100vh;display:grid;place-items:center}
 main{width:min(92%,390px);margin:30px auto;padding:28px;background:white;border:1px solid #ccded6;border-radius:20px}h1{font-size:1.45rem;margin:.6em 0}label{display:block;font-weight:600;margin:.8em 0 .25em}input,button{font:inherit;border:1px solid #9bb9aa;border-radius:9px;padding:9px}input{width:100%}button{background:white;color:#134737;cursor:pointer}button:disabled{opacity:.55}form button,#google{width:100%;margin-top:8px}#login{background:#076747;color:white}#status{font-size:.84rem;margin:0;overflow-wrap:anywhere}#bar{padding:6px 12px;background:#fff;border-bottom:1px solid #d4e5dc;display:flex;align-items:center;gap:8px;flex-wrap:wrap}#bar button{font-size:.78rem;padding:4px 9px}#emailDisplay{margin-inline-start:auto;font-size:.75rem;overflow-wrap:anywhere}
 #workspace{position:fixed;inset:0;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top);background:#fff}iframe{border:0;flex:1;width:100%;min-height:0}[hidden]{display:none!important}#message{color:#873c16;white-space:pre-line}img{border-radius:14px}.action{display:flex;gap:6px;flex-wrap:wrap}#choices{padding:8px;background:#fff5de}
-</style>
+dialog{width:min(94vw,460px);max-height:88vh;overflow:auto;border:1px solid #b8c9bf;border-radius:16px;padding:20px}dialog::backdrop{background:#1237}dialog header,.member{display:flex;align-items:center;justify-content:space-between;gap:8px}.member{padding:6px;border-bottom:1px solid #ddd}.member bdi{overflow-wrap:anywhere}dialog select{font:inherit;max-width:100%}dialog h3{margin:4px 0}dialog form button{margin-top:8px}dialog hr{margin:16px 0;border:0;border-top:1px solid #ddd}</style>
 <script defer src="./vendor/firebase-app-compat.js"></script>
 <script defer src="./vendor/firebase-auth-compat.js"></script>
 <script defer src="./vendor/firebase-firestore-compat.js"></script>
@@ -33,9 +33,15 @@ main{width:min(92%,390px);margin:30px auto;padding:28px;background:white;border:
 <form id="authForm"><label for="email">البريد الإلكتروني</label><input id="email" dir="ltr" type="email" autocomplete="username" required>
 <label for="password">كلمة المرور</label><input id="password" dir="ltr" type="password" autocomplete="current-password" required>
 <button id="login" type="submit">تسجيل الدخول</button><button id="create" type="submit">إنشاء حساب</button></form>
-<p role="status" id="message">جارٍ التحميل…</p><noscript>فعّل JavaScript لتشغيل التطبيق.</noscript>
+<div id="accountActions" hidden><button id="verify">إرسال رابط تأكيد البريد</button> <button id="checkAccess">تحقق من الوصول</button> <button id="leave">خروج</button></div><p role="status" id="message">جارٍ التحميل…</p><noscript>فعّل JavaScript لتشغيل التطبيق.</noscript>
 </main>
-<section id="workspace" hidden><header id="bar"><p id="status" role="status"></p><span id="emailDisplay"></span><button id="retry">تحديث</button><button id="logout">خروج</button></header>
+<section id="workspace" hidden><header id="bar"><p id="status" role="status"></p><span id="emailDisplay"></span><span id="branchLabel"></span><button hidden id="share">مشاركة وإدارة الفروع</button><button id="retry">تحديث</button><button id="logout">خروج</button></header>
 <div id="choices" hidden><p id="conflictText"></p><div class="action"><button id="download">تنزيل نسخة الجهاز</button><button id="accept">فتح نسخة السحابة</button><button id="replace">استخدام نسخة الجهاز</button></div></div>
+<dialog id="adminPanel"><header><h3>مشاركة الفرع</h3><button id="closePanel">تم</button></header>
+<label>الفرع الحالي <select id="branch"></select></label>
+<p>مالك الفرع <bdi id="branchOwner"></bdi></p><h4>الأعضاء وصلاحية التعديل</h4><section id="members"></section>
+<form id="assign"><label>إضافة بريد أو نقله إلى هذا الفرع<input type="email" required id="memberEmail" dir="ltr"></label><button>حفظ وتفعيل</button></form>
+<hr><h3>الإدارة · ملاك الفروع المعتمدون</h3><div id="owners"></div><h4>اعتماد مالك فرع جديد</h4><form id="newBranch"><label>اسم الفرع<input id="branchName" maxlength="100" required></label><label>بريد المالك<input type="email" required id="ownerEmail" dir="ltr"></label><button>إنشاء الفرع واعتماد المالك</button></form>
+<p role="status" id="adminMessage"></p></dialog>
 <iframe id="ledger" title="Daily Tracker"></iframe></section>
 </body></html>
