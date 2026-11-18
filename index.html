@@ -18,152 +18,75 @@
 
   <style>
     * { box-sizing: border-box; }
-    [hidden] { display: none !important; }
 
     body {
       margin: 0;
-      background: #171c30;
-      color: #eef1fa;
+      background: #f1f7f4;
+      color: #14392c;
       font: 16px/1.5 system-ui, sans-serif;
     }
 
-    input, button, select { font: inherit; }
-    button { cursor: pointer; }
-    button:disabled { opacity: .65; cursor: wait; }
-    :focus-visible { outline: 3px solid #8bbaff; outline-offset: 2px; }
-
-    #gate {
-      width: min(100%, 540px);
-      margin: 0 auto;
-      padding-bottom: 24px;
+    main, dialog {
+      width: min(94%, 410px);
+      padding: 24px;
+      background: white;
+      border: 1px solid #cbded3;
+      border-radius: 16px;
     }
 
-    .auth-banner {
-      text-align: center;
-      background: linear-gradient(115deg, #0e898b, #326dd6);
-      padding: 22px 14px;
-      border-radius: 0 0 24px 24px;
-    }
+    main { margin: 6vh auto; }
+    h1 { font-size: 1.45rem; }
+    label { display: block; margin-top: 12px; }
 
-    .auth-banner h1 {
-      margin: 0;
-      color: white;
-      font-size: clamp(20px, 5vw, 26px);
-      line-height: 1.25;
-    }
-
-    .auth-card {
-      margin: 14px 12px;
-      padding: 16px 14px 26px;
-      background: #222943;
-      border-radius: 18px;
-    }
-
-    .auth-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    .auth-title h2 {
-      font-size: 19px;
-      line-height: 1.25;
-      margin: 0;
-    }
-
-    #language {
-      color: #d9e3f7;
-      background: transparent;
-      border: 1px solid #51617e;
+    input, button, select {
+      font: inherit;
+      padding: 8px;
+      border: 1px solid #9bb9aa;
       border-radius: 8px;
-      padding: 4px 8px;
-      font-size: 13px;
     }
 
-    #gate label {
-      display: block;
-      font-weight: 650;
-      margin: 8px 0 4px;
+    input { width: 100%; }
+
+    button {
+      cursor: pointer;
+      background: white;
+      color: #14543b;
     }
 
-    #gate input {
-      width: 100%;
-      height: 45px;
-      padding: 8px 12px;
+    main button, dialog button { margin-top: 8px; }
+    form button, #google { width: 100%; }
+
+    #login {
+      background: #076747;
       color: white;
-      background: #111729;
-      border: 1px solid #44506e;
-      border-radius: 12px;
     }
 
-    #gate button:not(#language) {
-      width: 100%;
-      min-height: 48px;
-      font-weight: 650;
-      border-radius: 12px;
-      margin-top: 8px;
-    }
+    #language { float: inline-end; }
 
-    #gate #google {
+    #google {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
-      margin-top: 0;
-      background: white;
-      color: #202124;
-      border: 1px solid #dadce0;
     }
 
-    #google svg { width: 20px; height: 20px; flex: none; }
-
-    .auth-divider {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin: 14px 0 4px;
-      color: #abb6d1;
-      font-size: 14px;
+    #google svg {
+      width: 20px;
+      height: 20px;
+      flex: none;
     }
 
-    .auth-divider::before, .auth-divider::after {
-      content: "";
-      flex: 1;
-      height: 1px;
-      background: #435070;
-    }
-
-    #login {
-      background: #326dd6;
-      color: white;
-      border: 0;
-    }
-
-    #create, #forgot, #accountActions button {
-      background: transparent;
-      color: #65d5cd;
-      border: 1px solid #369b9e;
-    }
-
-    #authFeedback, #message {
-      color: #ffdfab;
+    #message, #status, #adminMessage, #authFeedback {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
-      margin: 10px 0;
     }
-
-    #gate p:empty { display: none; }
 
     #workspace {
       position: fixed;
       inset: 0;
       display: flex;
       flex-direction: column;
-      color: #15372c;
       background: white;
-      padding-top: env(safe-area-inset-top);
     }
 
     #bar, #choices {
@@ -176,48 +99,32 @@
       align-items: center;
       gap: 6px;
       flex-wrap: wrap;
-      border-bottom: 1px solid #d4e5dc;
     }
 
     #bar p { margin: 0; }
+    #emailDisplay { margin-inline-start: auto; }
     #bar button { font-size: .85rem; }
-    #emailDisplay { margin-inline-start: auto; overflow-wrap: anywhere; }
 
-    #workspace button, dialog input, dialog select {
-      border: 1px solid #9bb9aa;
-      border-radius: 8px;
-      padding: 7px 10px;
-      background: white;
-      color: #14543b;
+    iframe {
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+      border: 0;
     }
-
-    iframe { width: 100%; flex: 1; min-height: 0; border: 0; }
 
     dialog {
-      width: min(94%, 460px);
       max-height: 85vh;
       overflow: auto;
-      padding: 20px;
-      border: 1px solid #b8c9bf;
-      border-radius: 16px;
     }
-
-    dialog::backdrop { background: #10231f77; }
-    dialog label { display: block; margin: 10px 0 4px; }
-    dialog input { width: 100%; }
-    dialog form button { margin-top: 8px; }
-    dialog h3, dialog h4 { margin: 10px 0; }
 
     .member {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
-      border-bottom: 1px solid #ddd;
-      padding: 6px 0;
+      gap: 6px;
     }
 
-    .member bdi, #adminMessage, #status { overflow-wrap: anywhere; }
+    [hidden] { display: none !important; }
   </style>
 
   <script defer src="./vendor/firebase-app-compat.js"></script>
@@ -229,54 +136,48 @@
 
 <body>
   <main id="gate">
-    <header class="auth-banner">
-      <h1 data-ar="متتبع الدخل والمصروفات اليومية">Daily Income &amp; Expense Tracker</h1>
-    </header>
+    <button id="language" type="button">العربية</button>
 
-    <div class="auth-card">
-      <div class="auth-title">
-        <h2 data-ar="تسجيل الدخول أو إنشاء حساب">Sign in or create account</h2>
-        <button id="language" type="button">العربية</button>
-      </div>
+    <img src="./icons/icon-192.png" width="52" height="52" alt="">
 
-      <button id="google" type="button">
-        <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-        </svg>
-        <span data-ar="تسجيل الدخول باستخدام Google">Sign in with Google</span>
-      </button>
+    <h1 data-ar="متتبع الدخل والمصروفات اليومية">Daily Income &amp; Expense Tracker</h1>
 
-      <p role="alert" id="authFeedback"></p>
-      <p role="status" id="message"></p>
+    <p data-ar="سجّل الدخول لفتح دفترك ومزامنته بين أجهزتك.">
+      Sign in to open your ledger and sync across devices.
+    </p>
 
-      <form id="authForm">
-        <div class="auth-divider">
-          <span data-ar="أو باستخدام البريد">or with email</span>
-        </div>
+    <button id="google" type="button">
+      <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+      </svg>
+      <span data-ar="تسجيل الدخول باستخدام Google">Sign in with Google</span>
+    </button>
 
-        <label for="email" data-ar="البريد الإلكتروني">Email</label>
-        <input id="email" type="email" dir="ltr" autocomplete="username" required>
+    <form id="authForm">
+      <label for="email" data-ar="البريد الإلكتروني">Email</label>
+      <input id="email" type="email" dir="ltr" autocomplete="username" required>
 
-        <label for="password" data-ar="كلمة المرور">Password</label>
-        <input id="password" type="password" dir="ltr"
-               autocomplete="current-password" required>
+      <label for="password" data-ar="كلمة المرور">Password</label>
+      <input id="password" type="password" dir="ltr"
+             autocomplete="current-password" required>
 
-        <button id="login" type="submit" data-ar="تسجيل الدخول">Sign in</button>
-        <button id="create" type="submit" data-ar="إنشاء حساب">Create account</button>
-        <button id="forgot" type="button" data-ar="نسيت كلمة المرور">Forgot password</button>
-      </form>
+      <button id="login" type="submit" data-ar="تسجيل الدخول">Sign in</button>
+      <button id="create" type="submit" data-ar="إنشاء حساب">Create account</button>
+      <button id="forgot" type="button" data-ar="نسيت كلمة المرور">Forgot password</button>
+    </form>
 
-      <div id="accountActions" hidden>
-        <button id="verify" data-ar="إرسال رابط تأكيد البريد">Send verification email</button>
-        <button id="checkAccess" data-ar="تحقق من الوصول">Check access</button>
-        <button id="leave" data-ar="خروج">Sign out</button>
-      </div>
-
-      <noscript>Enable JavaScript to use Daily Tracker.</noscript>
+    <div id="accountActions" hidden>
+      <button id="verify" data-ar="إرسال رابط تأكيد البريد">Send verification email</button>
+      <button id="checkAccess" data-ar="تحقق من الوصول">Check access</button>
+      <button id="leave" data-ar="خروج">Sign out</button>
     </div>
+
+    <p role="status" id="message"></p>
+    <p role="alert" id="authFeedback"></p>
+    <noscript>Enable JavaScript to use Daily Tracker.</noscript>
   </main>
 
   <section id="workspace" hidden>
@@ -327,10 +228,12 @@
           <span data-ar="اسم الفرع">Store name</span>
           <input id="branchName" maxlength="100" required>
         </label>
+
         <label>
           <span data-ar="بريد المالك">Owner email</span>
           <input id="ownerEmail" type="email" dir="ltr" required>
         </label>
+
         <button data-ar="إنشاء الفرع واعتماد المالك">Create store and approve owner</button>
       </form>
 
@@ -353,7 +256,6 @@
         node.dataset.en = node.textContent.trim();
       });
 
-      // Messages produced by the existing multi-store cloud.js.
       const messages = [
         ["جارٍ تسجيل الدخول…", "Signing in…"],
         ["جارٍ التحقق من صلاحية الدخول…", "Checking access…"],
@@ -374,9 +276,11 @@
 
       function translateMessage() {
         const node = el("message");
+
         for (const [ar, en] of messages) {
           const from = choose(ar, en);
           const to = choose(en, ar);
+
           if (node.textContent.startsWith(from)) {
             node.textContent = to + node.textContent.slice(from.length);
             break;
@@ -394,9 +298,11 @@
       function paint() {
         document.documentElement.lang = language;
         document.documentElement.dir = choose("ltr", "rtl");
+
         labels.forEach(node => {
           node.textContent = node.dataset[language];
         });
+
         el("language").textContent = choose("العربية", "English");
         el("authFeedback").textContent = choose(...feedback);
         translateMessage();
@@ -423,6 +329,7 @@
       paint();
 
       let authClient;
+
       try {
         authClient = firebase.auth();
       } catch (error) {
@@ -436,8 +343,8 @@
 
       function report(error) {
         console.error("Firebase Authentication", error);
-        const details = [error.code, error.message].filter(Boolean).join(" — ");
 
+        const details = [error.code, error.message].filter(Boolean).join(" — ");
         let english = "Authentication failed.";
         let arabic = "تعذّرت المصادقة.";
 
@@ -449,9 +356,6 @@
         } else if (error.code === "auth/popup-blocked") {
           english = "Allow pop-ups for this site and try again, or sign in with email.";
           arabic = "اسمح بالنوافذ المنبثقة لهذا الموقع وأعد المحاولة، أو ادخل بالبريد.";
-        } else if (error.code === "auth/popup-closed-by-user") {
-          english = "The Google window closed before sign-in finished. Select Sign in with Google to retry.";
-          arabic = "أُغلقت نافذة Google قبل اكتمال الدخول. اضغط زر Google للمحاولة مجددًا.";
         }
 
         show(english + " " + details, arabic + " " + details);
@@ -474,14 +378,13 @@
         }
       }
 
-      el("google").onclick = () => run(() => {
-        show("Opening Google sign-in…", "جارٍ فتح نافذة تسجيل الدخول إلى Google…");
-        const provider = new firebase.auth.GoogleAuthProvider();
-        return authClient.signInWithPopup(provider).then(() => show("", ""));
-      });
+      el("google").onclick = () => run(() =>
+        authClient.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+      );
 
       el("authForm").onsubmit = event => {
         event.preventDefault();
+
         const method = event.submitter?.id === "create"
           ? "createUserWithEmailAndPassword"
           : "signInWithEmailAndPassword";
@@ -498,6 +401,7 @@
         run(async () => {
           authClient.languageCode = language;
           await authClient.sendPasswordResetEmail(el("email").value.trim());
+
           show(
             "Check your inbox for a password reset link.",
             "تحقّق من بريدك للحصول على رابط إعادة تعيين كلمة المرور."
