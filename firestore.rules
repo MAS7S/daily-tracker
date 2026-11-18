@@ -7,26 +7,92 @@ service cloud.firestore {
     }
     function email() { return request.auth.token.email.lower(); }
     function admin() { return verified() && email() == 'malekshahbien@gmail.com'; }
-    function assigned(id) {
-      let grant = get(/databases/$(database)/documents/access/$(email())).data;
-      return grant.active == true && grant.storeId == id;
+    function storePath(id) {
+      return /databases/$(database)/documents/restaurants/$(id);
     }
-    function accessStore(id) { return admin() || (verified() && assigned(id)); }
-    match /access/{address} {
+    function invitePath(address) {
+      return /databases/$(database)/documents/ownerInvites/$(address);
+    }
+    function assigned(id) {
+      let path = /databases/$(database)/documents/access/$(email());
+      return exists(path) && get(path).data.active == true && get(path).data.storeId == id;
+    }
+    function ownerEnabled(id, store) {
+      // Older stores use their owner's existing access grant until an admin sets ownerActive.
+      return store.get('ownerActive', null) == true
+        || (store.get('ownerActive', null) == null && assigned(id));
+    }
+    function owns(id) {
+      let store = get(storePath(id)).data;
+      return store.ownerEmail == email() && ownerEnabled(id, store);
+    }
+    function accessStore(id) {
+      return admin() || (verified() && canUseStore(id, get(storePath(id)).data));
+    }
+    function canUseStore(id, store) {
+      return store.ownerEmail == email() ? ownerEnabled(id, store) : assigned(id);
+    }
+    function validGrant(address) {
+      let grant = request.resource.data;
+      return address == address.lower()
+        && grant.keys().hasOnly(['active', 'storeId'])
+        && grant.active is bool && grant.storeId is string;
+    }
+    function ownerCanAssign(address) {
+      let id = request.resource.data.storeId;
+      return verified() && address != 'malekshahbien@gmail.com' && address != email() && owns(id);
+    }
+    function validStore(store) {
+      return store.keys().hasOnly(['name', 'ownerEmail', 'ownerActive'])
+        && store.name is string && store.name.size() > 0 && store.name.size() <= 100
+        && store.ownerEmail is string && store.ownerEmail == store.ownerEmail.lower()
+        && (!('ownerActive' in store) || store.ownerActive is bool);
+    }
+    function consumesApproval(id, store) {
+      let approval = invitePath(email());
+      return store.ownerEmail == email() && store.ownerActive == true
+        && get(approval).data.pendingStoreId == id
+        && getAfter(approval).data.pendingStoreId == '';
+    }
+    function createsApprovedStore(address) {
+      let id = resource.data.pendingStoreId;
+      let path = storePath(id);
+      return verified() && email() == address
+        && id is string && id.size() > 0
+        && request.resource.data.pendingStoreId == ''
+        && !exists(path) && getAfter(path).data.ownerEmail == address;
+    }
+    match /ownerInvites/{address} {
       allow get: if admin() || (verified() && email() == address);
       allow list: if admin();
-      allow create, update: if admin() && address == address.lower()
-        && request.resource.data.keys().hasOnly(['active','storeId'])
-        && request.resource.data.active is bool && request.resource.data.storeId is string
-        && getAfter(/databases/$(database)/documents/restaurants/$(request.resource.data.storeId)).data.name is string;
+      allow create, update: if request.resource.data.keys().hasOnly(['pendingStoreId'])
+        && request.resource.data.pendingStoreId is string && request.resource.data.pendingStoreId.size() <= 20
+        && (admin() || createsApprovedStore(address));
+    }
+    match /profiles/{uid} {
+      allow get: if verified() && request.auth.uid == uid;
+      allow create, update: if verified() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60;
+    }
+    match /access/{address} {
+      allow get: if admin() || (verified() && (email() == address || owns(resource.data.storeId)));
+      allow list: if admin() || (verified() && owns(resource.data.storeId));
+      allow create: if validGrant(address)
+        && (admin() || ownerCanAssign(address))
+        && existsAfter(storePath(request.resource.data.storeId));
+      allow update: if validGrant(address)
+        && (admin() || (request.resource.data.storeId == resource.data.storeId && ownerCanAssign(address)))
+        && existsAfter(storePath(request.resource.data.storeId));
       allow delete: if admin();
     }
     match /restaurants/{id} {
       allow get: if accessStore(id);
-      allow list: if admin();
-      allow create, update: if admin() && request.resource.data.keys().hasOnly(['name','ownerEmail'])
-        && request.resource.data.name is string && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 100 && request.resource.data.ownerEmail is string;
+      allow list: if admin() || (verified() && resource.data.ownerEmail == email());
+      allow create: if validStore(request.resource.data)
+        && (admin() || (verified() && consumesApproval(id, request.resource.data)));
+      allow update: if admin() && validStore(request.resource.data);
       match /ledgers/main {
         allow read: if accessStore(id);
         allow create, update: if accessStore(id)

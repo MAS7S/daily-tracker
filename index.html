@@ -183,8 +183,12 @@
   <section id="workspace" hidden>
     <header id="bar">
       <p id="status" role="status"></p>
+      <bdi id="profileName"></bdi>
+      <button id="editName" data-ar="تعديل الاسم">Edit name</button>
       <span id="emailDisplay"></span>
       <span id="branchLabel"></span>
+      <select id="activeBranch" aria-label="Store / الفرع" hidden></select>
+      <button id="useInvite" data-ar="إنشاء فرعي" hidden>Create my store</button>
       <button hidden id="share" data-ar="مشاركة وإدارة الفروع">Manage stores</button>
       <button id="retry" data-ar="تحديث">Refresh</button>
       <button id="logout" data-ar="خروج">Sign out</button>
@@ -212,36 +216,64 @@
 
       <form id="assign">
         <label>
-          <span data-ar="إضافة بريد أو نقله إلى هذا الفرع">Add or transfer email to this store</span>
+          <span data-ar="بريد العامل">Worker email</span>
           <input type="email" required id="memberEmail" dir="ltr">
         </label>
         <button data-ar="حفظ وتفعيل">Save and enable</button>
       </form>
 
-      <hr>
-      <h3 data-ar="ملاك الفروع المعتمدون">Approved store owners</h3>
-      <div id="owners"></div>
-
-      <h4 data-ar="اعتماد مالك فرع جديد">Approve a new store owner</h4>
-      <form id="newBranch">
-        <label>
-          <span data-ar="اسم الفرع">Store name</span>
-          <input id="branchName" maxlength="100" required>
-        </label>
-
-        <label>
-          <span data-ar="بريد المالك">Owner email</span>
-          <input id="ownerEmail" type="email" dir="ltr" required>
-        </label>
-
-        <button data-ar="إنشاء الفرع واعتماد المالك">Create store and approve owner</button>
-      </form>
+      <section id="adminOnly" hidden>
+        <hr>
+        <button id="ownerToggle" type="button"></button>
+        <form id="transferStore">
+          <label><span data-ar="بريد المالك الجديد للفرع الحالي">New owner email for selected store</span>
+            <input id="transferEmail" type="email" dir="ltr" required>
+          </label>
+          <button data-ar="نقل ملكية الفرع">Transfer ownership</button>
+        </form>
+        <hr>
+        <form id="inviteOwner">
+          <label><span data-ar="بريد صاحب الدعوة">Invitee email</span>
+            <input id="ownerEmail" type="email" dir="ltr" required>
+          </label>
+          <button data-ar="السماح بإنشاء فرع واحد">Approve one store</button>
+        </form>
+        <div id="owners"></div>
+        <form id="newBranch">
+          <label><span data-ar="اسم الفرع">Store name</span>
+            <input id="branchName" maxlength="100" required>
+          </label>
+          <button data-ar="إنشاء فرع باسمي">Create a store I own</button>
+        </form>
+      </section>
 
       <p role="status" id="adminMessage"></p>
     </dialog>
 
     <iframe id="ledger" title="Daily Tracker"></iframe>
   </section>
+
+  <dialog id="nameDialog">
+    <form id="nameForm">
+      <h3 data-ar="اسمك في التطبيق">Your name</h3>
+      <label><span data-ar="الاسم">Name</span>
+        <input id="userName" maxlength="60" autocomplete="name" required>
+      </label>
+      <button data-ar="حفظ الاسم">Save name</button>
+      <p id="nameFeedback" role="status"></p>
+    </form>
+  </dialog>
+
+  <dialog id="createDialog">
+    <form id="createInvitedStore">
+      <label><span data-ar="اسم فرعك">Your store name</span>
+        <input id="invitedStoreName" maxlength="100" required>
+      </label>
+      <button data-ar="إنشاء الفرع">Create store</button>
+      <button type="button" id="cancelCreate" data-ar="إلغاء">Cancel</button>
+      <p id="createFeedback" role="status"></p>
+    </form>
+  </dialog>
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
@@ -306,6 +338,7 @@
         el("language").textContent = choose("العربية", "English");
         el("authFeedback").textContent = choose(...feedback);
         translateMessage();
+        document.dispatchEvent(new Event("tracker-language"));
       }
 
       new MutationObserver(translateMessage).observe(el("message"), {

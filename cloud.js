@@ -116,10 +116,9 @@ async function reconcile(s) {
       }
       setState(s, {revision:head.revision,value:remote,dirty:false});
       openLedger(s);
-    } else if (s.record.dirty) {
-      await push(s);
-    } else if (!s.open) {
-      openLedger(s);
+    } else {
+      if (!s.open) openLedger(s);
+      if (s.record.dirty) await push(s);
     }
     if (s === session) {
       statusText(s.record.dirty ? "بانتظار المزامنة…" : "تمت المزامنة");
@@ -146,7 +145,7 @@ async function enter(user, branchId, ticket) {
   if (!navigator.locks) { message("افتح التطبيق في متصفح حديث."); return; }
   await navigator.locks.request(key, {ifAvailable:true}, async lock => {
     if (ticket !== generation || auth.currentUser?.uid !== user.uid) return;
-    if (!lock) { wanted = ""; message("أغلق نافذة الدفتر الأخرى ثم اضغط تحقق من الوصول."); return; }
+    if (!lock) { deny("أغلق نافذة الدفتر الأخرى ثم اضغط تحقق من الوصول."); return; }
     const record = JSON.parse(localStorage.getItem(key) || "null") || {revision:null,dirty:false,value:null};
     const s = { key, record, branchId, ref:db.collection("restaurants").doc(branchId).collection("ledgers").doc("main") };
     session = s;
@@ -158,7 +157,6 @@ async function enter(user, branchId, ticket) {
       if (s !== session) return;
       if (!snap.metadata.fromCache && !snap.metadata.hasPendingWrites) schedule(s);
     }, error => { if (s === session) deny(error.code); });
-    if (s.record.value) openLedger(s);
     schedule(s,0);
     await new Promise(resolve => { s.release = resolve; });
     unsubscribe();
@@ -197,166 +195,448 @@ function init() {
   if (config.projectId === "restaurant-3be9c" || config.authDomain?.startsWith("restaurant-3be9c.")) { message("استخدم إعدادات مشروع Firebase الجديد المستقل."); return; }
   firebase.initializeApp(config);
   auth = firebase.auth(); db = firebase.firestore();
-  const act = async fn => {
-    const buttons = gate.querySelectorAll("button");
-    buttons.forEach(b => b.disabled = true); message("جارٍ تسجيل الدخول…");
-    try { await fn(); }
-    catch(error) { message("تعذّر تسجيل الدخول. " + (error.code || error.message)); }
-    finally { buttons.forEach(b => b.disabled = false); }
-  };
-  byId("google").onclick = () => act(() => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()));
-  byId("authForm").onsubmit = e => {
-    e.preventDefault();
-    const method = e.submitter?.id === "create" ? "createUserWithEmailAndPassword" : "signInWithEmailAndPassword";
-    act(() => auth[method](byId("email").value.trim(),byId("password").value));
-  };
   auth.onAuthStateChanged(startAccess);
 
 }
 const ADMIN = "malekshahbien@gmail.com";
 const emailOf = user => (user?.email || "").trim().toLowerCase();
-let generation = 0, identity = 0, accessOff = [], wanted = "", selectedName = "";
-const stores = new Map(), accounts = new Map();
 const accessRef = email => db.collection("access").doc(email);
 const storeRef = id => db.collection("restaurants").doc(id);
+const inviteRef = email => db.collection("ownerInvites").doc(email);
+const profileRef = user => db.collection("profiles").doc(user.uid);
+const t = (en, ar) => document.documentElement.lang === "ar" ? ar : en;
+const cacheNotice = () => t("Connect to verify store access.", "اتصل بالإنترنت للتحقق من صلاحية الفرع.");
+let generation = 0, identity = 0, wanted = "", selectedName = "";
+let listeners = [], stopWorker, stopMembers;
+let adminMode = false, profileName = "", nameLoading = false, invite, grant, worker, ready;
+const owned = new Map(), stores = new Map(), accounts = new Map(), invitations = new Map();
+
 function closeLedger() {
   ++generation;
-  const old = session; session = null; wanted = "";
+  const old = session;
+  session = null;
+  wanted = "";
   window.trackerBridge = null;
   if (old) { clearTimeout(old.timer); old.release?.(); }
-  frame.onload = null; frame.src = "about:blank";
-  workspace.hidden = true; gate.hidden = false; byId("choices").hidden = true;
-  if (byId("adminPanel").open) byId("adminPanel").close();
+  frame.onload = null;
+  frame.src = "about:blank";
+  workspace.hidden = true;
+  gate.hidden = false;
+  byId("choices").hidden = true;
 }
 function deny(reason) {
   closeLedger();
-  message(reason === "permission-denied" ? "الوصول إلى هذا الفرع غير مفعّل. تواصل مع المدير." : reason);
+  for (const id of ["adminPanel", "nameDialog", "createDialog"]) byId(id).close();
+  message(reason === "permission-denied"
+    ? t("Store access is disabled or you have no invitation.", "لا توجد دعوة لهذا الحساب أو أن صلاحية الفرع معطّلة.")
+    : reason);
 }
-function selectStore(user,id,name) {
-  selectedName = name;
-  if (wanted === id) { byId("branchLabel").textContent=name; return; }
-  closeLedger(); wanted=id;
-  enter(user,id,generation).catch(e => { if (wanted === id) deny(e.code || e.message); });
+function manages(id) {
+  return stores.has(id) && (adminMode || owned.has(id));
 }
-function adminRender() {
-  const branch=byId("branch"), members=byId("members");
-  branch.replaceChildren(...Array.from(stores, ([id,s]) => new Option(s.name,id)));
-  branch.value=wanted;
-  byId("branchOwner").textContent=stores.get(wanted)?.ownerEmail || ADMIN;
+function renderPanel() {
+  const current = stores.get(wanted);
+  const branch = byId("branch");
+  branch.replaceChildren(...[...stores].filter(([id]) => manages(id))
+    .map(([id, store]) => new Option(store.name, id)));
+  branch.value = wanted;
+  byId("branchOwner").textContent = current?.ownerEmail || "";
+  const members = byId("members");
   members.replaceChildren();
-  for (const [email,account] of accounts) {
-    if (account.storeId !== wanted) continue;
-    const row=document.createElement("div"), label=document.createElement("bdi"), button=document.createElement("button");
-    row.className="member"; label.textContent=email;
-    button.textContent=account.active ? "مفعّل · تعطيل" : "معطّل · تفعيل";
-    button.onclick=()=>adminAction(()=>accessRef(email).update({active:!account.active}));
-    row.append(label,button); members.append(row);
+  for (const [email, account] of accounts) {
+    if (account.storeId !== wanted || email === current?.ownerEmail) continue;
+    const row = document.createElement("div");
+    const label = document.createElement("bdi");
+    const button = document.createElement("button");
+    row.className = "member";
+    label.textContent = email;
+    button.textContent = account.active ? t("Disable", "تعطيل") : t("Enable", "تفعيل");
+    button.onclick = () => adminAction(() => accessRef(email).update({active: !account.active}));
+    row.append(label, button);
+    members.append(row);
   }
-  const owners=byId("owners"); owners.replaceChildren();
-  for (const branch of stores.values()) {
-    const row=document.createElement("p");
-    const active=branch.ownerEmail===ADMIN || accounts.get(branch.ownerEmail)?.active;
-    row.textContent=branch.name+" · "+branch.ownerEmail+" · "+(active?"مفعّل":"معطّل");
+  if (!members.childElementCount) members.textContent = t("No workers yet.", "لا يوجد عمّال بعد.");
+  const toggle = byId("ownerToggle");
+  toggle.hidden = !current || current.ownerEmail === ADMIN;
+  const ownerEnabled = current?.ownerActive ?? (accounts.get(current?.ownerEmail)?.active === true);
+  toggle.textContent = ownerEnabled ? t("Disable owner", "تعطيل المالك") : t("Enable owner", "تفعيل المالك");
+  const owners = byId("owners");
+  owners.replaceChildren();
+  for (const [email, approval] of invitations) {
+    if (!approval.pendingStoreId) continue;
+    const row = document.createElement("div");
+    const label = document.createElement("bdi");
+    const button = document.createElement("button");
+    row.className = "member";
+    label.textContent = email;
+    button.textContent = t("Cancel approval", "إلغاء الموافقة");
+    button.onclick = () => adminAction(() => cancelApproval(email, approval.pendingStoreId));
+    row.append(label, button);
     owners.append(row);
   }
-  if (!members.childElementCount) members.textContent="لا توجد حسابات إضافية لهذا الفرع.";
+}
+function renderToolbar() {
+  const selector = byId("activeBranch");
+  selector.replaceChildren(...[...stores].map(([id, store]) => new Option(store.name, id)));
+  selector.value = wanted;
+  selector.hidden = stores.size < 2;
+  byId("share").hidden = !manages(wanted);
+  byId("useInvite").hidden = adminMode || !invite?.pendingStoreId;
+  byId("profileName").textContent = profileName;
+  byId("emailDisplay").textContent = auth.currentUser?.email || "";
+  if (byId("adminPanel").open && !manages(wanted)) byId("adminPanel").close();
+}
+function listenMembers() {
+  stopMembers?.();
+  stopMembers = null;
+  accounts.clear();
+  renderPanel();
+  if (!manages(wanted)) return;
+  const id = wanted;
+  stopMembers = db.collection("access").where("storeId", "==", id).onSnapshot(snap => {
+    if (wanted !== id) return;
+    accounts.clear();
+    snap.forEach(doc => accounts.set(doc.id, doc.data()));
+    renderPanel();
+  }, error => {
+    if (wanted === id) byId("adminMessage").textContent = error.code || error.message;
+  });
+}
+function selectStore(id) {
+  const store = stores.get(id);
+  if (!store) return;
+  selectedName = store.name;
+  byId("branchLabel").textContent = store.name;
+  if (wanted !== id) {
+    closeLedger();
+    wanted = id;
+    sessionStorage.setItem(prefix + emailOf(auth.currentUser) + ":store", id);
+    const ticket = generation;
+    enter(auth.currentUser, id, ticket).catch(error => {
+      if (ticket === generation) deny(error.code || error.message);
+    });
+    listenMembers();
+  }
+  renderToolbar();
+}
+async function refreshView() {
+  if (!ready || !navigator.onLine) return;
+  const user = auth.currentUser;
+  const token = identity;
+  const directEmail = emailOf(user);
+  if (!user) return;
+  stores.clear();
+  for (const [id, store] of owned) {
+    const allowed = adminMode || (store.ownerActive ?? (grant?.active && grant.storeId === id));
+    if (allowed) stores.set(id, store);
+  }
+  if (worker && grant?.active && worker.id === grant.storeId && worker.store.ownerEmail !== directEmail) {
+    stores.set(worker.id, worker.store);
+  }
+  if (!stores.size && !invite?.pendingStoreId) {
+    deny("permission-denied");
+    return;
+  }
+  if (!profileName) {
+    if (nameLoading || byId("nameDialog").open) return;
+    nameLoading = true;
+    try {
+      const snap = await profileRef(user).get({source: "server"});
+      if (token !== identity || (!stores.size && !invite?.pendingStoreId)) return;
+      profileName = snap.data()?.name || "";
+      if (!profileName) {
+        byId("userName").value = user.displayName || "";
+        byId("nameFeedback").textContent = "";
+        byId("nameDialog").showModal();
+        return;
+      }
+    } catch (error) {
+      if (token === identity) deny(error.code || error.message);
+      return;
+    } finally {
+      if (token === identity) nameLoading = false;
+    }
+  }
+  if (stores.size) {
+    const last = sessionStorage.getItem(prefix + directEmail + ":store");
+    selectStore(stores.has(wanted) ? wanted : stores.has(last) ? last : stores.keys().next().value);
+  } else {
+    closeLedger();
+    workspace.hidden = false;
+    gate.hidden = true;
+    byId("branchLabel").textContent = "";
+    statusText(t("You have approval to create one store.", "لديك موافقة لإنشاء فرع واحد."));
+    renderToolbar();
+  }
 }
 async function startAccess(user) {
-  const token=++identity;
-  for (const off of accessOff) off();
-  accessOff=[]; closeLedger(); stores.clear(); accounts.clear();
-  const admin=emailOf(user) === ADMIN && user?.emailVerified;
-  byId("accountActions").hidden=!user;
-  byId("verify").hidden=!user || user.emailVerified;
-  byId("authForm").hidden=!!user; byId("google").hidden=!!user;
-  byId("share").hidden=!admin;
+  const token = ++identity;
+  listeners.forEach(stop => stop());
+  listeners = [];
+  stopWorker?.();
+  stopMembers?.();
+  stopWorker = stopMembers = null;
+  closeLedger();
+  for (const id of ["adminPanel", "nameDialog", "createDialog"]) byId(id).close();
+  [owned, stores, accounts, invitations].forEach(map => map.clear());
+  invite = grant = worker = null;
+  ready = nameLoading = false;
+  profileName = "";
+  const email = emailOf(user);
+  adminMode = email === ADMIN;
+  byId("adminOnly").hidden = !adminMode;
+  byId("accountActions").hidden = !user;
+  byId("verify").hidden = !user || user.emailVerified;
+  byId("authForm").hidden = byId("google").hidden = byId("forgot").hidden = !!user;
   if (!user) { message(""); return; }
   if (!user.emailVerified) { message("أكّد بريدك ثم اضغط تحقق من الوصول."); return; }
   message("جارٍ التحقق من صلاحية الدخول…");
-  const current=()=>token===identity && auth.currentUser?.uid===user.uid;
-  const fail=e=>{if(current()) deny(e.code || e.message);};
+  const current = () => identity === token && auth.currentUser?.uid === user.uid;
+  const received = new Set();
+  const fail = error => { if (current()) deny(error.code || error.message); };
+  const listen = (key, ref, apply) => {
+    listeners.push(ref.onSnapshot({includeMetadataChanges: true}, snap => {
+      if (!current() || snap.metadata.hasPendingWrites) return;
+      if (snap.metadata.fromCache) {
+        if (received.has(key)) deny(cacheNotice());
+        return;
+      }
+      apply(snap);
+      received.add(key);
+      ready = adminMode ? received.has("owned") : ["owned", "grant", "invite"].every(k => received.has(k));
+      if (key === "grant" && grant?.active && !owned.has(grant.storeId) && !worker) return;
+      if (ready) void refreshView();
+    }, fail));
+  };
   try {
-    if (admin) {
-      const main=storeRef("main");
-      await db.runTransaction(async tx=>{
-        if (!(await tx.get(main)).exists) tx.set(main,{name:"الفرع الرئيسي",ownerEmail:ADMIN});
+    const collection = db.collection("restaurants");
+    if (adminMode) {
+      await db.runTransaction(async tx => {
+        if (!(await tx.get(storeRef("main"))).exists) {
+          tx.set(storeRef("main"), {name: "Main store", ownerEmail: ADMIN, ownerActive: true});
+        }
       });
       if (!current()) return;
-      accessOff.push(db.collection("restaurants").onSnapshot({includeMetadataChanges:true},snap=>{
-        if (!current()) return;
-        if (snap.metadata.fromCache) { deny("يلزم اتصال لتأكيد صلاحيات الفروع."); return; }
-        stores.clear(); snap.forEach(d=>stores.set(d.id,d.data()));
-        const last=sessionStorage.getItem(prefix+"admin-branch");
-        const id=stores.has(wanted) ? wanted : stores.has(last) ? last : "main";
-        if (stores.has(id)) selectStore(user,id,stores.get(id).name);
-        adminRender();
-      },fail));
-      accessOff.push(db.collection("access").onSnapshot(snap=>{
-        if (!current()) return;
-        accounts.clear(); snap.forEach(d=>accounts.set(d.id,d.data())); adminRender();
-      },fail));
+      listen("invites", db.collection("ownerInvites"), snap => {
+        invitations.clear();
+        snap.forEach(doc => invitations.set(doc.id, doc.data()));
+        renderPanel();
+      });
     } else {
-      let change=0;
-      accessOff.push(accessRef(emailOf(user)).onSnapshot({includeMetadataChanges:true},async snap=>{
-        const version=++change;
-        if (!current()) return;
-        if (snap.metadata.fromCache) {deny("يلزم اتصال للتحقق من صلاحية الفرع."); return;}
-        const grant=snap.data();
-        if (!grant?.active) {deny("permission-denied"); return;}
-        if (wanted && wanted !== grant.storeId) closeLedger();
-        try {
-          const branch=await storeRef(grant.storeId).get({source:"server"});
-          if (current() && version===change && branch.exists) selectStore(user,branch.id,branch.data().name);
-        } catch(e) { if(version===change) fail(e); }
-      },fail));
+      listen("invite", inviteRef(email), snap => { invite = snap.data(); });
+      listen("grant", accessRef(email), snap => {
+        grant = snap.data();
+        const id = grant?.active ? grant.storeId : "";
+        if (!id || worker?.id !== id) worker = null;
+        stopWorker?.();
+        stopWorker = null;
+        if (!id) return;
+        stopWorker = storeRef(id).onSnapshot({includeMetadataChanges: true}, store => {
+          if (!current() || !grant?.active || grant.storeId !== id || store.metadata.hasPendingWrites) return;
+          if (store.metadata.fromCache) return;
+          worker = store.exists ? {id, store: store.data()} : null;
+          void refreshView();
+        }, error => {
+          if (!current() || grant?.storeId !== id) return;
+          worker = null;
+          if (error.code === "permission-denied") void refreshView();
+          else fail(error);
+        });
+      });
     }
-  } catch(e) { fail(e); }
+    listen("owned", adminMode ? collection : collection.where("ownerEmail", "==", email), snap => {
+      owned.clear();
+      snap.forEach(doc => owned.set(doc.id, doc.data()));
+    });
+  } catch (error) { fail(error); }
 }
-byId("checkAccess").onclick=async()=>{
-  try {const u=auth.currentUser; await u.reload();await u.getIdToken(true);await startAccess(auth.currentUser);}
-  catch(e){message(e.code || e.message);}
-};
-byId("verify").onclick=async()=>{
-  try {await auth.currentUser.sendEmailVerification();message("أرسلنا رابط التأكيد إلى بريدك.");} catch(e){message(e.code || e.message);}
-};
-byId("leave").onclick=()=>auth.signOut().catch(e=>message(e.code));
-byId("share").onclick=()=>{adminRender();byId("adminPanel").showModal();};
-byId("closePanel").onclick=()=>byId("adminPanel").close();
-byId("branch").onchange=e=>{
-  const id=e.target.value;
-  if (!stores.has(id)) return;
-  sessionStorage.setItem(prefix+"admin-branch",id);
-  selectStore(auth.currentUser,id,stores.get(id).name);adminRender();
-};
-async function adminAction(fn) {
-  try {await fn();byId("adminMessage").textContent="تم الحفظ.";}
-  catch(e){byId("adminMessage").textContent=e.code || e.message;}
+async function adminAction(action, form, feedbackId = "adminMessage") {
+  const button = form?.querySelector("button");
+  if (button?.disabled) return false;
+  if (button) button.disabled = true;
+  const feedback = byId(feedbackId);
+  feedback.textContent = "";
+  try {
+    await action();
+    feedback.textContent = t("Saved.", "تم الحفظ.");
+    form?.reset();
+    return true;
+  } catch (error) {
+    feedback.textContent = error.code || error.message;
+    return false;
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
-async function assign(email, target, newName) {
-  if (email.includes("/") || (email===ADMIN && !newName)) throw Error("حساب المدير يملك صلاحية جميع الفروع.");
-  await db.runTransaction(async tx=>{
-    const grant=email===ADMIN ? null : await tx.get(accessRef(email));
-    const oldId=grant?.data()?.storeId;
-    const old=oldId && oldId!==target.id ? await tx.get(storeRef(oldId)) : null;
-    if (old?.data()?.ownerEmail===email) tx.update(old.ref,{ownerEmail:ADMIN});
-    if (newName) tx.set(target,{name:newName,ownerEmail:email});
-    if (email!==ADMIN) tx.set(accessRef(email),{storeId:target.id,active:true});
+function onSubmit(id, action, feedbackId) {
+  byId(id).onsubmit = event => {
+    event.preventDefault();
+    void adminAction(action, event.currentTarget, feedbackId);
+  };
+}
+function readEmail(id) {
+  const email = byId(id).value.trim().toLowerCase();
+  if (!email || email.includes("/")) throw Error(t("Enter a valid email.", "أدخل بريدًا صحيحًا."));
+  return email;
+}
+function readName(id) {
+  const name = byId(id).value.trim();
+  if (!name) throw Error(t("Enter a name.", "أدخل اسمًا."));
+  return name;
+}
+async function cancelApproval(email, id) {
+  await db.runTransaction(async tx => {
+    const ref = inviteRef(email);
+    const snap = await tx.get(ref);
+    if (snap.data()?.pendingStoreId === id) tx.update(ref, {pendingStoreId: ""});
   });
 }
-byId("assign").onsubmit=e=>{
-  e.preventDefault();const email=byId("memberEmail").value.trim().toLowerCase();
-  adminAction(async()=>{await assign(email,storeRef(wanted));byId("memberEmail").value="";});
+byId("checkAccess").onclick = async () => {
+  try {
+    const user = auth.currentUser;
+    await user.reload();
+    await user.getIdToken(true);
+    await startAccess(auth.currentUser);
+  } catch (error) { message(error.code || error.message); }
 };
-byId("newBranch").onsubmit=e=>{
-  e.preventDefault();const name=byId("branchName").value.trim(), email=byId("ownerEmail").value.trim().toLowerCase();
-  if (!name) return;
-  const form=e.currentTarget, submit=form.querySelector("button");
-  if (submit.disabled) return;
-  submit.disabled=true;
-  const target=db.collection("restaurants").doc();
-  adminAction(async()=>{await assign(email,target,name);form.reset();}).finally(()=>{submit.disabled=false;});
+byId("verify").onclick = async () => {
+  try {
+    await auth.currentUser.sendEmailVerification();
+    message("أرسلنا رابط التأكيد إلى بريدك.");
+  } catch (error) { message(error.code || error.message); }
 };
-window.addEventListener("offline",()=>{if(auth?.currentUser) deny("انقطع الاتصال. يُفتح الدفتر بعد التحقق مجددًا من صلاحية الفرع.");});
-window.addEventListener("online",()=>{if(auth?.currentUser) startAccess(auth.currentUser);});
+byId("leave").onclick = () => auth.signOut().catch(error => message(error.code));
+byId("share").onclick = () => {
+  if (!manages(wanted)) return;
+  byId("adminMessage").textContent = "";
+  renderPanel();
+  byId("adminPanel").showModal();
+};
+byId("closePanel").onclick = () => byId("adminPanel").close();
+byId("activeBranch").onchange = byId("branch").onchange = event => selectStore(event.target.value);
+document.addEventListener("tracker-language", renderPanel);
 
-try { init(); } catch(error) { message("تعذّر بدء التطبيق. " + error.message); }
+onSubmit("assign", async () => {
+  const email = readEmail("memberEmail");
+  const id = wanted;
+  const store = stores.get(id);
+  if (email === ADMIN || email === store?.ownerEmail) {
+    throw Error(t("This email already manages the store.", "هذا البريد يدير الفرع بالفعل."));
+  }
+  const ref = accessRef(email);
+  const grant = {storeId: id, active: true};
+  try {
+    if (adminMode) {
+      await db.runTransaction(async tx => {
+        const existing = (await tx.get(ref)).data();
+        if (existing && existing.storeId !== id) {
+          throw Error(t("This worker already belongs to another store.",
+            "هذا العامل مسند إلى فرع آخر."));
+        }
+        tx.set(ref, grant);
+      });
+    } else {
+      await ref.set(grant);
+    }
+  } catch (error) {
+    if (error.code !== "permission-denied" || adminMode) throw error;
+    throw Error(t("Unable to add this worker. Ask the administrator to check their assignment.",
+      "تعذّرت إضافة العامل. اطلب من مدير المشروع التحقق من الفرع المسند إليه."));
+  }
+});
+onSubmit("newBranch", async () => {
+  await db.collection("restaurants").doc().set({
+    name: readName("branchName"), ownerEmail: ADMIN, ownerActive: true
+  });
+});
+onSubmit("inviteOwner", async () => {
+  const email = readEmail("ownerEmail");
+  if (email === ADMIN) throw Error(t("Use Create a store I own.", "استخدم إنشاء فرع باسمي."));
+  const ref = inviteRef(email);
+  const id = db.collection("restaurants").doc().id;
+  await db.runTransaction(async tx => {
+    const current = await tx.get(ref);
+    if (current.data()?.pendingStoreId) {
+      throw Error(t("This email already has one unused approval.", "لهذا البريد موافقة واحدة لم تُستخدم بعد."));
+    }
+    tx.set(ref, {pendingStoreId: id});
+  });
+});
+byId("ownerToggle").onclick = () => {
+  const store = stores.get(wanted);
+  if (!adminMode || !store || store.ownerEmail === ADMIN) return;
+  const active = store.ownerActive ?? (accounts.get(store.ownerEmail)?.active === true);
+  void adminAction(() => storeRef(wanted).update({ownerActive: !active}));
+};
+onSubmit("transferStore", async () => {
+  const email = readEmail("transferEmail");
+  const target = storeRef(wanted);
+  if (!confirm(t("Transfer this store and its ledger to " + email + "?",
+    "نقل هذا الفرع ودفتره إلى " + email + "؟"))) return;
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(target);
+    if (!snap.exists) throw Error(t("Store not found.", "الفرع غير موجود."));
+    const previous = snap.data().ownerEmail;
+    if (previous === email) throw Error(t("This email already owns the store.", "هذا البريد يملك الفرع بالفعل."));
+    const previousGrant = previous === ADMIN ? null : await tx.get(accessRef(previous));
+    if (previousGrant?.data()?.storeId === target.id) tx.delete(previousGrant.ref);
+    tx.update(target, {ownerEmail: email, ownerActive: true});
+  });
+});
+byId("useInvite").onclick = () => {
+  byId("createFeedback").textContent = "";
+  byId("createDialog").showModal();
+};
+byId("cancelCreate").onclick = () => byId("createDialog").close();
+byId("createInvitedStore").onsubmit = async event => {
+  event.preventDefault();
+  const ok = await adminAction(async () => {
+    const name = readName("invitedStoreName");
+    const user = auth.currentUser;
+    const email = emailOf(user);
+    const expected = invite?.pendingStoreId;
+    const ref = inviteRef(email);
+    await db.runTransaction(async tx => {
+      const current = await tx.get(ref);
+      if (!expected || current.data()?.pendingStoreId !== expected) {
+        throw Error(t("This approval is no longer available.", "هذه الموافقة لم تعد متاحة."));
+      }
+      tx.set(storeRef(expected), {name, ownerEmail: email, ownerActive: true});
+      tx.update(ref, {pendingStoreId: ""});
+    });
+    sessionStorage.setItem(prefix + email + ":store", expected);
+    if (stores.has(expected)) selectStore(expected);
+  }, event.currentTarget, "createFeedback");
+  if (ok) byId("createDialog").close();
+};
+byId("nameDialog").addEventListener("cancel", event => { if (!profileName) event.preventDefault(); });
+byId("editName").onclick = () => {
+  byId("userName").value = profileName;
+  byId("nameFeedback").textContent = "";
+  byId("nameDialog").showModal();
+};
+byId("nameForm").onsubmit = async event => {
+  event.preventDefault();
+  const user = auth.currentUser;
+  const token = identity;
+  const ok = await adminAction(async () => {
+    const name = readName("userName");
+    await profileRef(user).set({name});
+    if (token === identity) {
+      profileName = name;
+      byId("profileName").textContent = name;
+    }
+  }, event.currentTarget, "nameFeedback");
+  if (ok && token === identity) {
+    byId("nameDialog").close();
+    void refreshView();
+  }
+};
+window.addEventListener("offline", () => {
+  if (auth?.currentUser) deny(cacheNotice());
+});
+window.addEventListener("online", () => {
+  if (auth?.currentUser) void startAccess(auth.currentUser);
+});
+
+try { init(); } catch (error) { message("تعذّر بدء التطبيق. " + error.message); }
