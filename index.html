@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#10B981">
+<meta name="application-name" content="Daily Tracker">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Daily Tracker">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png">
+<title>Daily Income &amp; Expense Tracker</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f1f7f4;color:#12372b;font:16px/1.55 system-ui,sans-serif;min-height:100vh;display:grid;place-items:center}
+main{width:min(92%,390px);margin:30px auto;padding:28px;background:white;border:1px solid #ccded6;border-radius:20px}h1{font-size:1.45rem;margin:.6em 0}label{display:block;font-weight:600;margin:.8em 0 .25em}input,button{font:inherit;border:1px solid #9bb9aa;border-radius:9px;padding:9px}input{width:100%}button{background:white;color:#134737;cursor:pointer}button:disabled{opacity:.55}form button,#google{width:100%;margin-top:8px}#login{background:#076747;color:white}#status{font-size:.84rem;margin:0;overflow-wrap:anywhere}#bar{padding:6px 12px;background:#fff;border-bottom:1px solid #d4e5dc;display:flex;align-items:center;gap:8px;flex-wrap:wrap}#bar button{font-size:.78rem;padding:4px 9px}#emailDisplay{margin-inline-start:auto;font-size:.75rem;overflow-wrap:anywhere}
+#workspace{position:fixed;inset:0;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top);background:#fff}iframe{border:0;flex:1;width:100%;min-height:0}[hidden]{display:none!important}#message{color:#873c16;white-space:pre-line}img{border-radius:14px}.action{display:flex;gap:6px;flex-wrap:wrap}#choices{padding:8px;background:#fff5de}
+</style>
+<script defer src="./vendor/firebase-app-compat.js"></script>
+<script defer src="./vendor/firebase-auth-compat.js"></script>
+<script defer src="./vendor/firebase-firestore-compat.js"></script>
+<script defer src="./firebase-config.js"></script>
+<script defer src="./cloud.js"></script>
+</head>
+<body>
+<main id="gate">
+<img src="./icons/icon-192.png" width="54" height="54" alt="">
+<h1 lang="en" dir="ltr">Daily Income &amp; Expense Tracker</h1>
+<p>سجّل الدخول لفتح دفترك ومزامنته بين أجهزتك.</p>
+<button id="google" lang="en">Sign in with Google</button>
+<form id="authForm"><label for="email">البريد الإلكتروني</label><input id="email" dir="ltr" type="email" autocomplete="username" required>
+<label for="password">كلمة المرور</label><input id="password" dir="ltr" type="password" autocomplete="current-password" required>
+<button id="login" type="submit">تسجيل الدخول</button><button id="create" type="submit">إنشاء حساب</button></form>
+<p role="status" id="message">جارٍ التحميل…</p><noscript>فعّل JavaScript لتشغيل التطبيق.</noscript>
+</main>
+<section id="workspace" hidden><header id="bar"><p id="status" role="status"></p><span id="emailDisplay"></span><button id="retry">تحديث</button><button id="logout">خروج</button></header>
+<div id="choices" hidden><p id="conflictText"></p><div class="action"><button id="download">تنزيل نسخة الجهاز</button><button id="accept">فتح نسخة السحابة</button><button id="replace">استخدام نسخة الجهاز</button></div></div>
+<iframe id="ledger" title="Daily Tracker"></iframe></section>
+</body></html>

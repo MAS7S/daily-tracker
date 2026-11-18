@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daily Income &amp; Expense Tracker</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#10B981">
+<style>
+:root{--bg:#f3f4f6;--card:#fff;--ink:#111827;--mute:#6b7280;--line:#e5e7eb;--accent:#2563eb;--credit:#2563eb;--cash:#16a34a;--danger:#dc2626;--warn:#d97706;--net:#111827;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f172a;--card:#1e293b;--ink:#f1f5f9;--mute:#94a3b8;--line:#334155;--accent:#3b82f6;--credit:#60a5fa;--cash:#4ade80;--danger:#f87171;--warn:#fbbf24;--net:#2563eb}}
+:root[data-theme="dark"]{--bg:#0f172a;--card:#1e293b;--ink:#f1f5f9;--mute:#94a3b8;--line:#334155;--accent:#3b82f6;--credit:#60a5fa;--cash:#4ade80;--danger:#f87171;--warn:#fbbf24;--net:#2563eb}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:10px;max-width:820px;margin-inline:auto}
+#mmsg{white-space:pre-line}#rb{background:#ea580c}h1{font-size:22px;margin:4px 0 4px}.hd{display:flex;align-items:center;justify-content:space-between;gap:8px}#lg{padding:7px 14px;font-size:14px;flex:0 0 auto}
+html[dir=rtl] th{text-align:right}html[dir=rtl] th.r,html[dir=rtl] td.t{text-align:left}html[dir=rtl] td.d{padding-left:2px;padding-right:6px}html[dir=rtl] .xb,html[dir=rtl] .sr b,html[dir=rtl] .box b{unicode-bidi:plaintext}
+.range{color:var(--mute);font-size:14px;margin-bottom:14px}
+.sum{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
+.box small{color:var(--mute);display:block;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.box b{font-size:20px}
+.box.big{grid-column:1/-1;background:var(--net);border-color:var(--net);color:#fff}
+.box.big small{color:#ffffffcc}.box.big b{font-size:28px}
+.c b{color:var(--credit)}.k b{color:var(--cash)}.e b{color:var(--danger)}
+.sb{border-radius:16px;overflow:hidden;border:1px solid var(--line);margin-bottom:8px}
+.sr{padding:16px 18px}.sr small{display:block;font-size:13px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+.sr b{display:block;font-size:34px;font-weight:900;line-height:1.15;margin-top:2px;font-variant-numeric:tabular-nums;word-break:break-all}
+.sr i{display:block;font-style:normal;font-size:12px;opacity:.75;margin-top:2px}
+.sr.n{background:#0b0f14;color:#fff}.sr.k{background:#e8f7ee;color:#15803d}.sr.c{background:#e8efff;color:#1d4ed8}
+@media (prefers-color-scheme:dark){.sr.k{background:#12301f;color:#4ade80}.sr.c{background:#14264a;color:#7db0ff}}
+.sb2{display:flex;gap:10px;margin-top:10px}.sb2>div{flex:1;background:#ffffff1a;border-radius:12px;padding:10px 12px}
+.sb2 small{font-size:12px!important;opacity:.85}.sb2 b{font-size:22px!important;margin-top:2px!important}
+.sr.e{background:#fdecec;color:#b91c1c}.sr.i{background:#e8efff;color:#1d4ed8}.sr.i .sb2>div{background:#1d4ed81a}
+@media (prefers-color-scheme:dark){.sr.e{background:#3b1518;color:#f87171}.sr.i{background:#14264a;color:#7db0ff}}
+.sbx{margin-bottom:10px}
+.neg{color:#dc2626!important}
+.tl{display:flex;gap:16px;color:var(--mute);font-size:14px;margin:0 4px 14px;flex-wrap:wrap}.tl b{color:var(--ink)}
+.tot{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-top:12px;overflow:hidden}
+.tot div{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-top:1px solid var(--line);font-size:16px}
+.tot div:first-child{border-top:0}.tot span{color:var(--mute);font-weight:600}.tot b{font-variant-numeric:tabular-nums}
+.tot .nn{background:var(--bg)}.tot .nn b{font-size:19px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+.panel label{font-size:12px;color:var(--mute);display:block;margin-bottom:3px}
+.panel>div{flex:1 1 150px}
+.wrap{overflow:hidden;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th{font-size:10px;text-transform:uppercase;color:var(--mute);text-align:left;padding:8px 3px;background:var(--bg)}
+td{padding:5px 2px;border-top:1px solid var(--line)}
+td.d{font-weight:600;white-space:nowrap;font-size:13px;padding-left:6px}td.d span{display:block;font-weight:400;color:var(--mute);font-size:11px}
+td.t{font-weight:700;text-align:right;white-space:nowrap;font-size:13px;padding-right:4px}
+th.r{text-align:right}
+tfoot td{font-weight:700;background:var(--bg);font-size:12px;padding-left:6px}
+input{width:100%;min-width:0;padding:6px 3px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);font-size:16px}
+.del{background:none;border:0;color:var(--danger);font-size:20px;cursor:pointer;padding:0}
+a.b,button.b{padding:11px 14px;border:0;border-radius:11px;font-size:15px;font-weight:700;cursor:pointer;color:#fff;background:var(--accent)}
+a.b.gray,button.b.gray{background:var(--mute)}button.b.alt{background:var(--cash)}button.b.warn{background:var(--warn)}button.b.red{background:var(--danger)}button.b.gray{background:var(--mute)}
+.actions{display:flex;gap:8px;margin:14px 0 24px;flex-wrap:wrap}.actions .b{flex:1 1 140px}
+.hint{color:var(--mute);font-size:12px;margin:-8px 0 16px}
+.xb{width:100%;min-width:0;padding:6px 1px;border:1px dashed var(--danger);border-radius:9px;background:transparent;color:var(--danger);font:700 13px system-ui,sans-serif;cursor:pointer}
+.lb{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0;margin-bottom:2px}
+.lb.cr{color:var(--credit)}.lb.ca{color:var(--cash)}.lb.ex{color:var(--danger)}
+.modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:20px;z-index:50}
+.modal.on{display:flex}
+.mbox{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:16px;max-width:420px;width:100%;max-height:85vh;overflow-y:auto}
+.mbox h3{margin:0 0 10px;font-size:16px}
+.mbox p{margin:0 0 14px;line-height:1.5}
+.mbox .btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}#bx{width:100%;height:170px;font:12px/1.4 ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);padding:8px;resize:none}.mbox .btns .b{flex:1}
+.er{display:flex;gap:6px;margin-bottom:8px}.er .n{flex:1 1 auto}.er .a{flex:0 0 100px}
+.bn{background:var(--warn);color:#fff;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:14px;font-weight:700;display:none;cursor:pointer}.ar{border-top:1px solid var(--line);padding:10px 0;font-size:13px;line-height:1.6}.ar b{font-size:14px}.ar .btns{margin-top:6px}.ar label{display:flex;gap:8px;align-items:center}.ar input{width:auto}
+.sr.e .sb2>div{background:#b91c1c1a}.er{flex-wrap:wrap}.er .n{flex:1 1 100%}.er .a{flex:1 1 90px}.er .t{flex:0 0 90px;padding:6px 2px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);font-size:16px}
+.sbx{margin-bottom:6px}.sb{border-radius:14px}.sr{padding:10px 12px}.sr small{font-size:11px}.sr b{font-size:24px;margin-top:0;line-height:1.1}.sb2{gap:8px;margin-top:6px}.sb2>div{padding:6px 10px;border-radius:10px}.sb2 small{font-size:10px!important}.sb2 b{font-size:16px!important;margin-top:0!important}
+#nv{display:flex;gap:8px;align-items:center;flex:1 1 100%}#nv .b{flex:0 0 auto}button.b:disabled{opacity:.35}
+.addbar{margin:12px 0 4px}.addbar .b{width:100%;padding:14px;font-size:17px}.actions{margin-top:8px}
+.gl{flex:1 1 100%;font-size:12px;font-weight:700;color:var(--mute);text-transform:uppercase;letter-spacing:.05em;margin-top:6px}
+#gm{order:1}#arc{order:2;flex:1 1 100%}#bk2{order:3}#nv{order:4}#gr{order:5}#pdf{order:6}#csv{order:7}#gb{order:8}#exp{order:9}#imp{order:10}#clearall{order:12;flex:1 1 100%;margin-top:10px}
+#add{background:#2563eb}#arc{background:#7c3aed}#bk2{background:#0d9488}#pdf{background:#16a34a}#csv{background:#ea580c}#exp{background:#0891b2}#imp{background:#db2777}#clearall{background:#dc2626}#pv,#nx{background:#4f46e5}.fl{display:block;font-size:12px;color:var(--mute);margin:8px 0 3px}#chb{order:0;flex:1 1 100%;background:#ca8a04}.er select.c{flex:1 1 100%;padding:8px 6px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);font-size:16px}#nl{flex:1;text-align:center;font-weight:700;font-size:14px}
+</style>
+</head>
+<body>
+<div class="bn" id="cb"></div>
+<div class="bn" id="rb"></div>
+<div class="bn" id="bn"></div>
+<div class="hd"><h1 id="h1">Daily Income &amp; Expense Tracker</h1><button class="b gray" id="lg" type="button">عربي</button></div>
+<div class="range" id="range"></div>
+<div class="panel">
+  <div><label for="store">Store name</label><input id="store" placeholder="Store name" autocomplete="off"></div>
+</div>
+<div class="sb sbx"><div class="sr n"><small>Net profit</small><b id="gn">$0.00</b>
+  <div class="sb2"><div><small>Cash net</small><b id="kl">$0.00</b></div><div><small>Credit net</small><b id="tc">$0.00</b></div></div></div></div>
+<div class="sb sbx"><div class="sr e"><small>Expenses</small><b id="ge">$0.00</b>
+  <div class="sb2"><div><small>Cash</small><b id="ec2">$0.00</b></div><div><small>Credit</small><b id="ek2">$0.00</b></div></div></div></div>
+<div class="sb sbx"><div class="sr i"><small>Total income</small><b id="gi">$0.00</b>
+  <div class="sb2"><div><small>Cash</small><b id="ic">$0.00</b></div><div><small>Credit</small><b id="icr">$0.00</b></div></div></div></div>
+<div class="panel">
+  <div><label for="start">Start date for a new period</label><input type="date" id="start"></div>
+  <button class="b warn" id="new">Start new period</button>
+</div>
+<div class="wrap"><table><colgroup><col style="width:15%"><col style="width:19%"><col style="width:19%"><col style="width:19%"><col style="width:19%"><col style="width:9%"></colgroup>
+  <thead><tr><th>Date</th><th>Credit</th><th>Cash</th><th>Expenses</th><th class="r">Net income</th><th></th></tr></thead>
+  <tbody id="rows"></tbody>
+</table></div>
+<div class="addbar"><button class="b" id="add">+ Add day</button></div>
+<div class="actions">
+  <button class="b" id="chb">Checks</button>
+  <div class="gl" id="gm">Months</div>
+  <div class="gl" id="gr">Reports</div>
+  <div class="gl" id="gb">Backup</div>
+  <button class="b alt" id="pdf">Save as PDF</button>
+  <button class="b warn" id="clearall">Clear all numbers</button>
+  <button class="b gray" id="arc">Previous months</button>
+  <button class="b alt" id="bk2" style="display:none;flex:1 1 100%">↩ Back to current month</button>
+  <div id="nv"><button class="b gray" id="pv" type="button">◀ Older</button><div id="nl"></div><button class="b gray" id="nx" type="button">Newer ▶</button></div>
+  <button class="b gray" id="csv">Export Excel (CSV)</button>
+  <button class="b gray" id="exp">Export backup</button>
+  <button class="b gray" id="imp">Import backup</button>
+  <input type="file" id="impf" accept=".json,.csv,application/json,text/csv" style="display:none">
+</div>
+<div class="hint">Tap the Expenses button on a day to list each expense and what it was for. Net income = credit + cash − expenses.<br><b>Version 3</b> · backup works by copy &amp; paste.</div>
+<div class="modal" id="bm"><div class="mbox"><h3 id="bt"></h3><p id="bp" style="font-size:13px;color:var(--mute);margin:0 0 8px"></p><textarea id="bx" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea><div class="btns" id="bb"></div></div></div>
+<div class="modal" id="qm"><div class="mbox"><h3>Checks</h3><div class="btns" id="qt" style="margin:0 0 8px"></div><div id="ql"></div><div class="btns"><button class="b alt" id="qa" type="button">+ Add check</button><button class="b gray" id="qd" type="button">Close</button></div></div></div>
+<div class="modal" id="qf"><div class="mbox"><h3 id="qh"></h3><label class="fl">Check number</label><input id="fn" autocomplete="off"><label class="fl">Vendor / warehouse</label><input id="fv" autocomplete="off"><label class="fl">Amount</label><input id="fa" inputmode="decimal" placeholder="0.00"><label class="fl">Date it will be cashed</label><input id="fd" type="date"><label class="fl">Date written (purchase day)</label><input id="fb" type="date"><label class="fl">Note (optional)</label><input id="fo" autocomplete="off"><div class="btns"><button class="b gray" id="fc" type="button">Cancel</button><button class="b" id="fs" type="button">Save</button></div></div></div>
+<div class="modal" id="am"><div class="mbox"><h3>Previous months</h3><div id="al"></div><div class="ar" id="asum"></div><div class="btns"><button class="b" id="ad">Close</button></div></div></div>
+<div class="modal" id="modal"><div class="mbox"><p id="mmsg"></p><div class="btns"><button class="b gray" id="mno">Cancel</button><button class="b warn" id="myes">Confirm</button></div></div></div>
+<div class="modal" id="xm"><div class="mbox"><h3 id="xt"></h3><div id="xl"></div><div class="btns"><button class="b alt" id="xa">+ Cash expense</button><button class="b" id="xc">+ Credit expense</button><button class="b" id="xq" style="background:#ca8a04">+ Check</button></div><div class="btns"><button class="b" id="xd">Done</button></div></div></div>
+<div class="modal" id="cm"><div class="mbox"><h3>New expense type</h3><input id="cn" placeholder="Type name" autocomplete="off" style="margin-bottom:10px"><div class="btns"><button class="b gray" id="cx" type="button">Cancel</button><button class="b" id="co" type="button">Add</button></div></div></div>
+<script>
+const bridge = window.parent.trackerBridge;
+if (!bridge) throw new Error("Open index.html to use Daily Tracker");
+var $=function(i){return document.getElementById(i)};
+function ask(msg,fn){$("mmsg").textContent=msg;var m=$("modal");m.classList.add("on");$("mno").onclick=function(){m.classList.remove("on")};$("myes").onclick=function(){m.classList.remove("on");fn()}}
+function note(msg){$("mmsg").textContent=msg;var m=$("modal");m.classList.add("on");$("mno").onclick=function(){m.classList.remove("on")};$("myes").onclick=function(){m.classList.remove("on")}}
+function iso(t){return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0")}
+var lang="en";try{if(localStorage.getItem("daily-tracker-lang")==="ar")lang="ar"}catch(e){}
+function LC(){return lang==="ar"?"ar-u-ca-gregory-nu-latn":"en-US"}
+var store="";
+var data=[{d:iso(new Date()),c:"",k:"",x:[]}],arch=[],lb="",chq=[],cats=["Food & supplies","Salaries","Rent","Utilities","Maintenance","Cleaning & packaging","Other"];
+try{var s=bridge.read();if(s&&Array.isArray(s.data)&&s.data.length){data=s.data;store=String(s.store||"");if(Array.isArray(s.arch))arch=s.arch;lb=s.lb||"";if(Array.isArray(s.chq))chq=s.chq;if(Array.isArray(s.cats)&&s.cats.length)cats=s.cats}}catch(e){}
+arch.forEach(function(p){p.data.forEach(function(r){if(!Array.isArray(r.x))r.x=[]})});
+data.forEach(function(r){if(!Array.isArray(r.x))r.x=[]});
+function snapshot(){return {store:store,data:data,arch:arch,lb:lb,cats:cats,chq:chq}}
+function save(){bridge.save(snapshot())}
+function money(n){return (n<0?"-":"")+"$"+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function dt(i){return new Date(i+"T12:00:00")}
+function wd(i){return dt(i).toLocaleDateString(LC(),{weekday:"short"})}
+function md(i){return dt(i).toLocaleDateString(LC(),{month:"short",day:"numeric"})}
+function num(v){var x=parseFloat(v);return isNaN(x)?0:x}
+function ex(r){return r.x.reduce(function(t,e){return t+num(e.a)},0)}
+function exk(r){return r.x.reduce(function(t,e){return t+(e.t==="credit"?num(e.a):0)},0)}
+function totals(){
+  var c=0,k=0,e=0,ek=0;
+  data.forEach(function(r,i){
+    var x=ex(r);c+=num(r.c);k+=num(r.k);e+=x;ek+=exk(r);
+    var el=$("t"+i);if(el)el.textContent=money(num(r.c)+num(r.k)-x);
+    var eb=$("e"+i);if(eb)eb.textContent=money(x);
+  });
+  $("tc").textContent=money(c-ek);$("tc").className=(c-ek<0?"neg":"");$("kl").textContent=money(k-(e-ek));$("kl").className=(k-(e-ek)<0?"neg":"");$("ec2").textContent=money(e-ek);$("ek2").textContent=money(ek);$("gi").textContent=money(c+k);$("ic").textContent=money(k);$("icr").textContent=money(c);$("ge").textContent=money(e);$("gn").textContent=money(c+k-e);
+  chk();$("h1").textContent=store?store+" – Daily Tracker":"Daily Income & Expense Tracker";
+  $("range").textContent=md(data[0].d)+" – "+md(data[data.length-1].d)+", "+dt(data[data.length-1].d).getFullYear()+" · "+data.length+" day"+(data.length>1?"s":"");
+}
+function render(){
+  syncChk();var tb=$("rows");tb.innerHTML="";
+  data.forEach(function(r,i){
+    var tr=document.createElement("tr");
+    tr.innerHTML='<td class="d">'+md(r.d)+'<span>'+wd(r.d)+'</span></td>'+
+      '<td><span class="lb cr">Credit</span><input inputmode="decimal" placeholder="0.00" data-f="c"></td>'+
+      '<td><span class="lb ca">Cash</span><input inputmode="decimal" placeholder="0.00" data-f="k"></td>'+
+      '<td><span class="lb ex">Expenses</span><button class="xb" id="e'+i+'" type="button">$0.00</button></td>'+
+      '<td class="t" id="t'+i+'">$0.00</td>'+
+      '<td style="white-space:nowrap"><button class="del" type="button" title="Delete day">×</button></td>';
+    var ins=tr.querySelectorAll("input");
+    ins[0].value=r.c;ins[1].value=r.k;
+    ins.forEach(function(inp){inp.addEventListener("input",function(){r[inp.dataset.f]=inp.value;save();totals()})});
+    tr.querySelector(".xb").onclick=function(){openX(r)};
+    tr.querySelector(".del").onclick=function(){ask("Delete "+md(r.d)+" completely?",function(){if(data.length>1){data.splice(i,1)}else{r.c="";r.k="";r.x=[]}save();render()})};
+    tb.appendChild(tr);
+  });
+  totals();
+}
+var cur=null;
+function openX(r){cur=r;$("xt").textContent="Expenses – "+wd(r.d)+", "+md(r.d);drawX();$("xm").classList.add("on")}
+function drawX(){
+  var l=$("xl");l.innerHTML="";
+  cur.x.forEach(function(e,j){
+    var d=document.createElement("div");d.className="er";
+    d.innerHTML='<select class="c"></select><input class="n" placeholder="Note (optional)"><input class="a" inputmode="decimal" placeholder="0.00"><select class="t"><option value="cash">Cash</option><option value="credit">Credit</option></select><button class="del" type="button">×</button>';
+    var ins=d.querySelectorAll("input");ins[0].value=e.n||"";ins[1].value=e.a||"";
+    ins[0].oninput=function(){e.n=ins[0].value;save()};
+    ins[1].oninput=function(){e.a=ins[1].value;save();totals()};
+    var cs=d.querySelector("select.c");fillC(cs,e);cs.onchange=function(){if(cs.value==="__new"){openC(function(v){if(cats.indexOf(v)<0)cats.push(v);e.c=v;save();drawX()})}else{e.c=cs.value;save();totals()}};var sl=d.querySelector("select.t");sl.value=e.t==="credit"?"credit":"cash";sl.onchange=function(){e.t=sl.value;save();totals()};
+    d.querySelector(".del").onclick=function(){cur.x.splice(j,1);save();drawX();totals()};
+    l.appendChild(d);
+  });
+}
+function addX(t){cur.x.push({n:"",a:"",t:t,c:cats[0]});save();drawX();totals();var q=$("xl").querySelectorAll(".n");if(q.length)q[q.length-1].focus()}
+$("xa").onclick=function(){addX("cash")};$("xc").onclick=function(){addX("credit")};
+$("xd").onclick=function(){$("xm").classList.remove("on");cur=null;save();totals()};
+$("store").value=store;
+$("store").oninput=function(){store=this.value;save();totals()};
+$("add").onclick=async function(){
+  var t=dt(data[data.length-1].d);t.setDate(t.getDate()+1);
+  if(t.getDate()===1){
+    if(!curOf(allP()).v){note("This month is complete. Go to the current month to continue.");return}
+    var blob=null,fn="";
+    try{blob=buildPdf(reportPages());fn=(store?store.replace(/[^\w\u0600-\u06FF\- ]/g,"").trim().replace(/\s+/g,"-")+"-":"")+"report-"+data[0].d+"-to-"+data[data.length-1].d+".pdf"}catch(e){}
+    arch.push({store:store,data:data,saved:iso(new Date())});
+    data=[{d:iso(t),c:"",k:"",x:[]}];save();render();window.scrollTo(0,0);
+    var ok=false;if(blob){try{await saveBlob(blob,fn);ok=true}catch(e){}}
+    note("Month complete. It was saved in Previous months"+(ok?" and as a PDF":"")+". A new month started.");
+    return;
+  }
+  data.push({d:iso(t),c:"",k:"",x:[]});save();render();
+};
+$("new").onclick=function(){
+  var v=$("start").value;
+  if(!v){note("Pick a start date first.");return}
+  if(!curOf(allP()).v){note("You are viewing an older month. Tap Back to current month first.");return}
+  ask("Start a new period from "+md(v)+"? The current days will be saved in Previous months.",function(){keep();data=[{d:v,c:"",k:"",x:[]}];save();render()});
+};
+$("clearall").onclick=function(){ask("Clear all numbers and expenses? Dates stay.",function(){data.forEach(function(r){r.c="";r.k="";r.x=[]});save();render()})};
+var PW=1275,PH=1650;
+function reportPages(){
+  var P=[],c,x,y,C=[80,470,660,860,1050,1195];
+  function np(){c=document.createElement("canvas");c.width=PW;c.height=PH;x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,PW,PH);P.push(c);y=100}
+  function T(t,px,py,o){o=o||{};t=tr(String(t));x.direction=/[\u0600-\u06FF]/.test(t)?"rtl":"ltr";x.font=(o.b?"bold ":"")+(o.s||26)+"px Arial,Tahoma,sans-serif";x.fillStyle=o.c||"#111827";x.textAlign=o.a||"left";if(o.w)x.fillText(t,px,py,o.w);else x.fillText(t,px,py)}
+  function row(v,o){o=o||{};T(v[0],C[0]+8,y,o);for(var i=1;i<6;i++)T(v[i],C[i],y,Object.assign({a:"right"},o))}
+  function head(){x.fillStyle="#111827";x.fillRect(60,y-38,1155,56);row(["Date","Credit","Cash","Income","Expenses","Net inc."],{b:1,c:"#fff",s:24});y+=62}
+  var c0=0,k0=0,e0=0,ek0=0;data.forEach(function(r){c0+=num(r.c);k0+=num(r.k);e0+=ex(r);ek0+=exk(r)});
+  np();
+  T((store?store+" - ":"")+"Income & Expense Report",60,y,{b:1,s:40,w:1155});y+=48;
+  T(md(data[0].d)+" - "+md(data[data.length-1].d)+", "+dt(data[data.length-1].d).getFullYear()+"  ("+data.length+" days)",60,y,{s:26,c:"#6b7280"});y+=50;
+  x.fillStyle="#0b0f14";x.fillRect(60,y-34,1155,190);
+  T("NET PROFIT",86,y+2,{b:1,s:24,c:"#fff"});T(money(c0+k0-e0),86,y+60,{b:1,s:52,c:"#fff"});
+  T("Cash net: "+money(k0-(e0-ek0)),86,y+120,{b:1,s:28,c:"#86efac"});T("Credit net: "+money(c0-ek0),660,y+120,{b:1,s:28,c:"#93c5fd"});y+=206;
+  x.fillStyle="#fdecec";x.fillRect(60,y-34,1155,110);
+  T("EXPENSES",86,y+2,{b:1,s:24,c:"#b91c1c"});T(money(e0),86,y+56,{b:1,s:46,c:"#b91c1c"});y+=126;
+  x.fillStyle="#e8efff";x.fillRect(60,y-34,1155,190);
+  T("TOTAL INCOME",86,y+2,{b:1,s:24,c:"#1d4ed8"});T(money(c0+k0),86,y+60,{b:1,s:52,c:"#1d4ed8"});
+  T("Cash: "+money(k0),86,y+120,{b:1,s:28,c:"#15803d"});T("Credit: "+money(c0),660,y+120,{b:1,s:28,c:"#1d4ed8"});y+=226;
+  head();
+  data.forEach(function(r,i){
+    if(y>PH-140){np();head()}
+    var q=ex(r),inc=num(r.c)+num(r.k);
+    if(i%2===0){x.fillStyle="#f3f4f6";x.fillRect(60,y-38,1155,56)}
+    row([dt(r.d).toLocaleDateString(LC(),{weekday:"short",month:"short",day:"numeric"}),money(num(r.c)),money(num(r.k)),money(inc),money(q),money(inc-q)],{s:24});
+    y+=56;
+  });
+  if(y>PH-140){np()}
+  y+=30;
+  if(data.some(function(r){return r.x.length})){
+    if(y>PH-260){np()}
+    T("Expense details",60,y,{b:1,s:34});y+=56;
+    data.forEach(function(r){r.x.forEach(function(q){
+      if(y>PH-100){np()}
+      T(md(r.d),80,y,{s:24,c:"#6b7280"});
+      T((q.t==="credit"?tr("[Credit]")+" ":tr("[Cash]")+" ")+(q.c?tr(q.c)+(q.n?": ":""):"")+(q.n||(q.c?"":tr("(no description)"))),230,y,{s:24,w:750});
+      T(money(num(q.a)),1195,y,{a:"right",b:1,s:24,c:"#dc2626"});
+      y+=48;
+    })});
+  }
+  return P;
+}
+function buildPdf(pages){
+  var enc=new TextEncoder(),parts=[],off=0,xr=[],n=pages.length;
+  function add(b){if(typeof b==="string")b=enc.encode(b);parts.push(b);off+=b.length}
+  function obj(id,body){xr[id]=off;add(id+" 0 obj\n"+body+"\nendobj\n")}
+  add("%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n");
+  var kids=[];for(var i=0;i<n;i++)kids.push((3+3*i)+" 0 R");
+  obj(1,"<< /Type /Catalog /Pages 2 0 R >>");
+  var infoId=3*n+3;
+  obj(2,"<< /Type /Pages /Kids ["+kids.join(" ")+"] /Count "+n+" >>");
+  pages.forEach(function(c,i){
+    var pg=3+3*i,ct=pg+1,im=pg+2;
+    var bin=atob(c.toDataURL("image/jpeg",0.92).split(",")[1]),u=new Uint8Array(bin.length);
+    for(var j=0;j<bin.length;j++)u[j]=bin.charCodeAt(j);
+    obj(pg,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /XObject << /Im0 "+im+" 0 R >> >> /Contents "+ct+" 0 R >>");
+    var cs="q 612 0 0 792 0 0 cm /Im0 Do Q";
+    obj(ct,"<< /Length "+cs.length+" >>\nstream\n"+cs+"\nendstream");
+    xr[im]=off;add(im+" 0 obj\n<< /Type /XObject /Subtype /Image /Width "+PW+" /Height "+PH+" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "+u.length+" >>\nstream\n");add(u);add("\nendstream\nendobj\n");
+  });
+  obj(infoId,"<< /Title (Income and Expense Report) /Producer (Daily Tracker) >>");
+  var N=3*n+4,xo=off,t="xref\n0 "+N+"\n0000000000 65535 f \n";
+  for(var k=1;k<N;k++)t+=String(xr[k]).padStart(10,"0")+" 00000 n \n";
+  add(t+"trailer\n<< /Size "+N+" /Root 1 0 R /Info "+infoId+" 0 R >>\nstartxref\n"+xo+"\n%%EOF");
+  return new Blob(parts,{type:"application/pdf"});
+}
+async function saveBlob(blob,fn){
+  var dl=null;
+  try{dl=window.claude&&window.claude.use?await window.claude.use("downloads"):null}catch(e){}
+  if(dl){await dl.save({filename:fn,data:blob});return}
+  var u=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=u;a.download=fn;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(u)},60000);
+}
+$("pdf").onclick=async function(){
+  try{
+    var blob=buildPdf(reportPages());
+    var fn=(store?store.replace(/[^\w\u0600-\u06FF\- ]/g,"").trim().replace(/\s+/g,"-")+"-":"")+"report-"+data[0].d+"-to-"+data[data.length-1].d+".pdf";
+    await saveBlob(blob,fn);
+  }catch(err){if(err&&err.code==="declined")return;note("Could not save the PDF. Please try again.")}
+};
+function backupText(){return JSON.stringify({app:"daily-income-expense-tracker",version:3,exported:new Date().toISOString(),store:store,data:data,arch:arch,cats:cats,chq:chq},null,2)}
+function bopen(title,msg,ro,val,btns){
+  $("bt").textContent=title;$("bp").textContent=msg;
+  var t=$("bx");t.readOnly=ro;t.value=val;
+  var h=$("bb");h.innerHTML="";
+  btns.forEach(function(b){var e=document.createElement("button");e.type="button";e.className="b "+(b[2]||"");e.textContent=b[0];e.onclick=function(){b[1](e)};h.appendChild(e)});
+  $("bm").classList.add("on");
+}
+function bclose(){$("bm").classList.remove("on")}
+function applyBackupOld(text){
+  var o=null;
+  try{o=JSON.parse(text)}catch(e){}
+  var ok=o&&Array.isArray(o.data)&&o.data.length&&o.data.every(function(r){return r&&typeof r.d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(r.d)});
+  if(!ok){note("This is not a valid backup. Paste the full backup text or choose a backup file exported from this tracker.");return}
+  var nd=o.data.map(function(r){return{d:r.d,c:r.c==null?"":String(r.c),k:r.k==null?"":String(r.k),x:(Array.isArray(r.x)?r.x:[]).map(function(e){return{n:e&&e.n!=null?String(e.n):"",a:e&&e.a!=null?String(e.a):"",t:e&&e.t==="credit"?"credit":"cash"}})}});
+  var ns=String(o.store||"");
+  bclose();
+  ask("Replace the current data with this backup ("+nd.length+" day"+(nd.length>1?"s":"")+", "+md(nd[0].d)+" – "+md(nd[nd.length-1].d)+")? Current data will be overwritten.",function(){
+    data=nd;store=ns;save();$("store").value=store;render();
+  });
+}
+async function dlBackup(){
+  try{await saveBlob(new Blob([backupText()],{type:"application/json"}),"tracker-backup-"+iso(new Date())+".json");mark()}catch(err){}
+}
+$("exp").onclick=function(){
+  bopen("Export backup","Tap Copy, then paste the text into Notes or a message to yourself. To restore later, use Import backup and paste it back. You can also try Download file.",true,backupText(),[
+    ["Copy",function(btn){
+      var t=$("bx"),done=function(){btn.textContent="Copied ✓";mark()};
+      t.focus();t.select();t.setSelectionRange(0,t.value.length);
+      var okc=false;try{okc=document.execCommand("copy")}catch(e){}
+      if(okc){done();return}
+      try{navigator.clipboard.writeText(t.value).then(done,function(){btn.textContent="Press and hold to copy"})}catch(e){btn.textContent="Press and hold to copy"}
+    },"alt"],
+    ["Download file",dlBackup],
+    ["Close",bclose,"gray"]
+  ]);
+};
+$("imp").onclick=function(){
+  bopen("Import backup","Paste the backup text below, or choose a backup file. Then tap Import.",false,"",[
+    ["Choose file",function(){$("impf").click()}],
+    ["Import",function(){applyBackup($("bx").value)},"alt"],
+    ["Close",bclose,"gray"]
+  ]);
+};
+$("impf").onchange=function(){
+  var f=this.files&&this.files[0],inp=this;
+  if(!f)return;
+  var rd=new FileReader();
+  rd.onload=function(){inp.value="";$("bx").value=String(rd.result||"")};
+  rd.onerror=function(){inp.value="";note("Could not read that file. Paste the backup text instead.")};
+  rd.readAsText(f);
+};
+
+function num2(v){return num(v)}
+function has(d){return d.some(function(r){return num(r.c)||num(r.k)||r.x.length})}
+function keep(){if(has(data))arch.push({store:store,data:data,saved:iso(new Date())})}
+function mark(){lb=iso(new Date());save();chk()}
+function chk(){cqSum();var it=allP(),vi=it.findIndex(function(a){return a.v}),isC=curOf(it).v;$("bk2").style.display=isC?"none":"block";$("pv").disabled=vi<=0;$("nx").disabled=vi>=it.length-1;$("nl").textContent=md(data[0].d)+" – "+md(data[data.length-1].d)+", "+dt(data[data.length-1].d).getFullYear()+(isC?" · current":"");var b=$("bn"),old=!lb||(new Date()-dt(lb))>6048e5;b.style.display=(old&&(has(data)||arch.length))?"block":"none";b.textContent=lb?"⚠ No backup for over 7 days. Tap to back up now.":"⚠ No backup yet. Tap to back up now."}
+$("bn").onclick=function(){$("exp").click()};
+function backOld(){var i=arch.findIndex(function(a){return a.cur});if(i<0)return;var q=arch.splice(i,1)[0];arch.push({store:store,data:data,saved:iso(new Date())});data=q.data;store=q.store||store;$("store").value=store;save();render()}
+function navOld(dir){var items=arch.filter(function(a){return !a.cur}).concat([{data:data,store:store,v:1}]);items.sort(function(a,b){return a.data[0].d<b.data[0].d?-1:1});var vi=items.findIndex(function(a){return a.v}),t=items[vi+dir];if(!t){if(dir>0)back();return}arch.splice(arch.indexOf(t),1);arch.push({store:store,data:data,saved:iso(new Date())});data=t.data;store=t.store||store;$("store").value=store;save();render()}
+function allP(){var a=arch.concat([{data:data,store:store,v:1}]);a.sort(function(x,y){return x.data[0].d<y.data[0].d?-1:1});return a}
+function curOf(it){var td=iso(new Date()),c=it[0];it.forEach(function(p){if(p.data[0].d<=td)c=p});return c}
+function goto(t){if(t.v)return;var nvY=$("nv").getBoundingClientRect().top;arch.splice(arch.indexOf(t),1);arch.push({store:store,data:data,saved:iso(new Date())});data=t.data;store=t.store||store;$("store").value=store;save();render();var nvD=$("nv").getBoundingClientRect().top-nvY;if(nvD)window.scrollBy(0,nvD)}
+function back(){goto(curOf(allP()))}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(m){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]})}
+var cq="p",ce=null;
+function td(){return iso(new Date())}
+function nid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5)}
+function cqSum(){var p=chq.filter(function(c){return c.s==="p"}),o=p.filter(function(c){return c.due<=td()}),b=$("cb");b.style.display=p.length?"block":"none";b.style.background=o.length?"var(--danger)":"var(--warn)";b.textContent="Pending checks: "+money(p.reduce(function(t,c){return t+num(c.a)},0))+" ("+p.length+")"+(o.length?" \u00b7 "+o.length+" due now":"")+" \u2014 tap to view";rbSum()}
+function bookC(c){var day=null;allP().forEach(function(p){p.data.forEach(function(r){if(r.d===c.cd)day=r})});if(!day){var cp=curOf(allP()).data;day=cp[cp.length-1]}day.x.push({n:"Check #"+c.n+(c.v?" - "+c.v:""),a:String(c.a),t:"credit",c:"Checks",ch:c.id});c.bd=day.d}
+function unbookC(c){allP().forEach(function(p){p.data.forEach(function(r){r.x=r.x.filter(function(e){return e.ch!==c.id})})})}
+function openQ(){drawQ();$("qm").classList.add("on")}
+function openF(c,buy){ce=c||null;$("qh").textContent=c?"Edit / postpone check":"New check";$("fn").value=c?c.n:"";$("fv").value=c?c.v:"";$("fa").value=c?c.a:"";$("fd").value=c?c.due:"";$("fb").value=c?c.buy:(buy||td());$("fo").value=c?c.note||"":"";$("qf").classList.add("on")}
+function drawQ(){
+ var t=td(),L=$("ql"),T=$("qt");T.innerHTML="";
+ [["p","Pending"],["c","Cleared"],["a","All"]].forEach(function(x){var b=document.createElement("button");b.type="button";b.className="b"+(cq===x[0]?"":" gray");b.textContent=x[1];b.onclick=function(){cq=x[0];drawQ()};T.appendChild(b)});
+ var pend=chq.filter(function(c){return c.s==="p"}),wk=new Date();wk.setDate(wk.getDate()+7);var w=iso(wk);
+ var sum=function(a){return money(a.reduce(function(s,c){return s+num(c.a)},0))};
+ var f={a:function(){return true},p:function(c){return c.s==="p"},d:function(c){return c.s==="p"&&c.due<=t},c:function(c){return c.s==="c"}}[cq];
+ var l=chq.filter(f).sort(function(a,b){return a.due<b.due?-1:1});
+ L.innerHTML=l.length?"":"<p>No checks here.</p>";
+ l.forEach(function(c){
+  var d=document.createElement("div");d.className="ar";
+  var st=c.s==="c"?"\u2713 Cleared "+md(c.cd)+(c.auto?" \u00b7 auto":""):c.s==="x"?"Cancelled":(c.due<t?"\u26a0 OVERDUE":c.due===t?"\u26a0 DUE TODAY":"Pending");
+  d.innerHTML="<b>"+wd(c.due)+" "+md(c.due)+", "+esc(c.due.slice(0,4))+" \u00b7 "+money(num(c.a))+"</b> \u00b7 "+st+"<div>#"+esc(c.n||"-")+" \u00b7 "+esc(c.v||"-")+(c.note?" \u00b7 "+esc(c.note):"")+"</div><div>Written "+md(c.buy)+(c.h&&c.h.length?" \u00b7 postponed from "+c.h.map(function(x){return md(x)}).join(", "):"")+"</div><div class=\"btns\"></div>";
+  var B=d.querySelector(".btns"),add=function(txt,cls,fn){var b=document.createElement("button");b.type="button";b.className="b "+cls;b.textContent=txt;b.onclick=fn;B.appendChild(b)};
+  if(c.s==="p"){
+   add("\u2713 Cleared","alt",function(){var cd=c.due<=t?c.due:t;ask("Mark check #"+(c.n||"-")+" ("+money(num(c.a))+") as cleared? It will be added to expenses on "+md(cd)+".",function(){c.s="c";c.cd=cd;bookC(c);save();render();drawQ()})});
+   add("Edit / Postpone","",function(){openF(c)});
+   
+  }else if(c.s==="c")add("Undo clearing","warn",function(){ask("Undo? The expense booked for this check will be removed.",function(){unbookC(c);c.s="p";c.nA=1;delete c.auto;delete c.cd;save();render();drawQ()})});
+  else add("Restore","gray",function(){c.s="p";c.nA=1;save();drawQ();cqSum()});
+  add("Delete check","red",function(){ask(c.s==="c"?"Delete this check permanently? The expense booked for it will also be removed and the amount returns to that month.":"Delete this check permanently?",function(){if(c.s==="c")unbookC(c);chq.splice(chq.indexOf(c),1);save();render();drawQ()})});
+  L.appendChild(d)})}
+$("fs").onclick=function(){
+ var n=$("fn").value.trim(),v=$("fv").value.trim(),a=$("fa").value,d=$("fd").value,b=$("fb").value||td(),o=$("fo").value.trim();
+ if(!(num(a)>0)||!d){note("Enter the amount and the date the check will be cashed.");return}
+ var go=function(){var c=ce;if(c){if(c.due!==d){c.h=(c.h||[]).concat([c.due]);delete c.nA;delete c.rem}c.n=n;c.v=v;c.a=String(a);c.due=d;c.buy=b;c.note=o}else chq.push({id:nid(),n:n,v:v,a:String(a),due:d,buy:b,note:o,s:"p",h:[]});save();$("qf").classList.remove("on");cqSum();if($("qm").classList.contains("on"))drawQ();autoClear()};
+ var dup=chq.some(function(c){return c!==ce&&c.s!=="x"&&((n&&c.n===n)||(c.v===v&&num(c.a)===num(a)&&c.due===d))});
+ if(dup)ask("A similar check already exists (same number, or same vendor, amount and date). Save anyway?",go);else go()};
+$("fc").onclick=function(){$("qf").classList.remove("on")};
+$("qa").onclick=function(){openF(null)};$("qd").onclick=function(){$("qm").classList.remove("on")};
+$("cb").onclick=openQ;$("chb").onclick=openQ;
+$("xq").onclick=function(){var d0=cur.d;$("xm").classList.remove("on");cur=null;save();totals();openF(null,d0)};
+function fillC(cs,e){cs.innerHTML="";var mk=function(v,t){var o=document.createElement("option");o.value=v;o.textContent=t;cs.appendChild(o)};if(!e.c)mk("","— Type —");var L=cats.slice();if(e.c&&L.indexOf(e.c)<0)L.push(e.c);L.forEach(function(c){mk(c,c)});mk("__new","+ Add new type…");cs.value=e.c||""}
+function openC(fn){$("cn").value="";$("cm").classList.add("on");setTimeout(function(){$("cn").focus()},50);$("co").onclick=function(){var v=$("cn").value.trim();if(!v)return;$("cm").classList.remove("on");fn(v)};$("cx").onclick=function(){$("cm").classList.remove("on");drawX()}}
+function addCats(o){var add=function(c){if(c&&cats.indexOf(c)<0)cats.push(c)};(o.cats||[]).forEach(add);(o.chq||[]).forEach(function(c){if(c&&c.id&&!chq.some(function(q){return q.id===c.id}))chq.push(c)});[o.data].concat((o.arch||[]).map(function(p){return p.data})).forEach(function(d){d.forEach(function(r){(r.x||[]).forEach(function(e){add(e.c)})})})}
+function nav(dir){var it=allP(),vi=it.findIndex(function(a){return a.v}),t=it[vi+dir];if(t)goto(t)}
+$("bk2").onclick=back;$("pv").onclick=function(){nav(-1)};$("nx").onclick=function(){nav(1)};
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+function tot(d){var c=0,k=0,e=0;d.forEach(function(r){c+=num(r.c);k+=num(r.k);e+=ex(r)});return{c:c,k:k,e:e,n:c+k-e}}
+function fmtP(p){var d=p.data;return md(d[0].d)+" – "+md(d[d.length-1].d)+", "+dt(d[d.length-1].d).getFullYear()}
+function sumA(){var bx=$("al").querySelectorAll("input"),n=0,T={c:0,k:0,e:0};
+  arch.forEach(function(p,i){if(bx[i]&&bx[i].checked){n++;var t=tot(p.data);T.c+=t.c;T.k+=t.k;T.e+=t.e}});
+  if(!n)arch.forEach(function(p){var t=tot(p.data);T.c+=t.c;T.k+=t.k;T.e+=t.e});
+  $("asum").innerHTML=arch.length?"<b>Total ("+(n?n+" selected":"all "+arch.length)+")</b><br>Cash "+money(T.k)+" · Credit "+money(T.c)+" · Expenses "+money(T.e)+"<br><b>Net "+money(T.c+T.k-T.e)+"</b>":""}
+function drawA(){
+  var l=$("al");l.innerHTML="";
+  if(!arch.length)l.innerHTML='<p>No previous months yet. When you start a new period, the old one is saved here.</p>';
+  arch.forEach(function(p,i){var t=tot(p.data),d=document.createElement("div");d.className="ar";
+    d.innerHTML='<label><input type="checkbox"><b></b></label><div>Cash '+money(t.k)+' · Credit '+money(t.c)+' · Expenses '+money(t.e)+'</div><div><b>Net '+money(t.n)+'</b></div><div class="btns"><button class="b" type="button">Open</button><button class="b red" type="button">Delete</button></div>';
+    d.querySelector("b").textContent=fmtP(p)+(curOf(allP())===p?" (current month)":"");
+    d.querySelector("input").onchange=sumA;
+    var bs=d.querySelectorAll("button");
+    bs[0].onclick=function(){goto(p);$("am").classList.remove("on");return;ask("Open this period to view or edit? You can come back to your current period with the Back to current month button under Previous months.",function(){var wasV=arch.some(function(a){return a.cur}),q=arch.splice(i,1)[0];arch.push({store:store,data:data,saved:iso(new Date()),cur:wasV?undefined:true});data=q.data;store=q.store||store;$("store").value=store;save();render();$("am").classList.remove("on")})};
+    bs[1].onclick=function(){if(curOf(allP())===p){note("This is your current period. Use the Back to current month button.");return}ask("Delete this saved period permanently?",function(){arch.splice(i,1);save();drawA();chk()})};
+    l.appendChild(d)});
+  sumA()}
+$("arc").onclick=function(){drawA();$("am").classList.add("on")};
+$("ad").onclick=function(){$("am").classList.remove("on")};
+function csvq(v){v=String(v==null?"":v);return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+function csvText(){
+  var rows=[["period","store","date","type","description","amount","category"]],ps=arch.concat([{store:store,data:data}]);
+  ps.forEach(function(p,i){p.data.forEach(function(r){var b=[i+1,p.store||"",r.d],n=0;
+    if(num(r.c)){rows.push(b.concat(["Credit","",num(r.c)]));n++}
+    if(num(r.k)){rows.push(b.concat(["Cash","",num(r.k)]));n++}
+    r.x.forEach(function(e){rows.push(b.concat([e.t==="credit"?"Expense Credit":"Expense",e.n||"",num(e.a),e.c||""]));n++});
+    if(!n)rows.push(b.concat(["Day","",""]))})});
+  return "\ufeff"+rows.map(function(r){return r.map(csvq).join(",")}).join("\r\n")}
+$("csv").onclick=async function(){try{await saveBlob(new Blob([csvText()],{type:"text/csv"}),"tracker-"+iso(new Date())+".csv");mark()}catch(err){}};
+function csvParse(t){var R=[],r=[],f="",q=false,i,ch;t=t.replace(/^\ufeff/,"");
+  for(i=0;i<t.length;i++){ch=t[i];
+    if(q){if(ch=='"'){if(t[i+1]=='"'){f+='"';i++}else q=false}else f+=ch}
+    else if(ch=='"')q=true;
+    else if(ch==","){r.push(f);f=""}
+    else if(ch=="\n"||ch=="\r"){if(ch=="\r"&&t[i+1]=="\n")i++;r.push(f);f="";R.push(r);r=[]}
+    else f+=ch}
+  if(f!==""||r.length){r.push(f);R.push(r)}return R}
+function fromCsv(t){
+  var R=csvParse(t);if(!R.length||R[0].join().toLowerCase().indexOf("period,store,date")!==0)return null;
+  var ps=[],pm={};
+  R.slice(1).forEach(function(r){if(r.length<4||!/^\d{4}-\d{2}-\d{2}$/.test(r[2]))return;
+    var p=pm[r[0]];if(!p){p=pm[r[0]]={store:r[1],data:[],m:{}};ps.push(p)}
+    var d=p.m[r[2]];if(!d){d=p.m[r[2]]={d:r[2],c:"",k:"",x:[]};p.data.push(d)}
+    var ty=(r[3]||"").toLowerCase(),a=r[5]==null?"":r[5];
+    if(ty=="credit")d.c=String(num(d.c)+num(a));else if(ty=="cash")d.k=String(num(d.k)+num(a));else if(ty=="expense"||ty=="expense credit")d.x.push({n:r[4]||"",a:a,c:r[6]||"",t:ty=="expense credit"?"credit":"cash"})});
+  if(!ps.length)return null;
+  var last=ps[ps.length-1];
+  return{store:last.store,data:last.data,arch:ps.slice(0,-1).map(function(p){return{store:p.store,data:p.data}})}}
+function applyBackup(text){
+  var o=null;
+  try{o=JSON.parse(text)}catch(e){o=fromCsv(text)}
+  var okd=function(d){return Array.isArray(d)&&d.length&&d.every(function(r){return r&&typeof r.d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(r.d)})};
+  var ok=o&&okd(o.data)&&(o.arch==null||(Array.isArray(o.arch)&&o.arch.every(function(p){return p&&okd(p.data)})));
+  if(!ok){note("This is not a valid backup. Paste the full backup text or choose a backup/CSV file exported from this tracker.");return}
+  var cl=function(d){return d.map(function(r){return{d:r.d,c:r.c==null?"":String(r.c),k:r.k==null?"":String(r.k),x:(Array.isArray(r.x)?r.x:[]).map(function(e){return{c:e&&e.c?String(e.c):"",ch:e&&e.ch?String(e.ch):"",n:e&&e.n!=null?String(e.n):"",a:e&&e.a!=null?String(e.a):"",t:e&&e.t==="credit"?"credit":"cash"}})}})};
+  var nd=cl(o.data),ns=String(o.store||""),na=(o.arch||[]).map(function(p){return{store:String(p.store||""),saved:String(p.saved||""),data:cl(p.data)}});
+  bopen("Import","File has a current period ("+md(nd[0].d)+" – "+md(nd[nd.length-1].d)+") and "+na.length+" previous month(s). Choose how to import.",true,"",[
+    ["Replace all",function(){bclose();ask("Replace ALL current data and previous months with this file?",function(){data=nd;store=ns;arch=na;chq=[];addCats(o);save();$("store").value=store;render()})},"warn"],
+    ["Merge (keep mine, add missing months)",function(){bclose();var sg=function(p){return JSON.stringify(p.data)},have=arch.map(sg).concat([sg({data:data})]);
+      na.concat(has(nd)?[{store:ns,saved:"",data:nd}]:[]).forEach(function(p){if(have.indexOf(sg(p))<0){arch.push(p);have.push(sg(p))}});
+      addCats(o);save();chk();note("Done. Open Previous months to see them.")},"alt"],
+    ["Cancel",bclose,"gray"]]);
+}
+function rbSum(){var tm=new Date();tm.setDate(tm.getDate()+1);var tw=iso(tm),L=chq.filter(function(c){return c.s==="p"&&c.due===tw}),b=$("rb");
+  if(!L.length){b.style.display="none";return}
+  var A=lang==="ar",sum=money(L.reduce(function(t,c){return t+num(c.a)},0)),c=L[0],w="#"+(c.n||"-")+(c.v?" ("+c.v+")":"");
+  b.style.display="block";
+  b.textContent=L.length===1?(A?"\u23f0 \u0634\u064a\u0643 \u064a\u064f\u0635\u0631\u0641 \u063a\u062f\u0627\u064b: "+w+" \u00b7 "+sum+" \u2014 \u0627\u0636\u063a\u0637 \u0644\u0644\u0639\u0631\u0636":"\u23f0 Check due tomorrow: "+w+" \u00b7 "+sum+" \u2014 tap to view"):(A?"\u23f0 "+L.length+" \u0634\u064a\u0643\u0627\u062a \u062a\u064f\u0635\u0631\u0641 \u063a\u062f\u0627\u064b \u00b7 "+sum+" \u2014 \u0627\u0636\u063a\u0637 \u0644\u0644\u0639\u0631\u0636":"\u23f0 "+L.length+" checks due tomorrow \u00b7 "+sum+" \u2014 tap to view")}
+$("rb").onclick=openQ;
+/* Move a cleared check's expense to its real due day once that day exists */
+function syncChk(){var ch=false;chq.forEach(function(c){if(c.s!=="c"||!c.cd||c.bd===c.cd)return;
+  var ok=allP().some(function(p){return p.data.some(function(r){return r.d===c.cd})});
+  if(ok){unbookC(c);bookC(c);ch=true}});if(ch)save()}
+/* ---- Auto-clear checks on due date + reminders ---- */
+var NQ=[];
+function autoClear(pop){
+  var t=td(),tm=new Date();tm.setDate(tm.getDate()+1);var tmw=iso(tm),cl=[],rm=[];
+  chq.forEach(function(c){
+    if(c.s==="p"&&!c.nA&&c.due<=t){c.s="c";c.cd=c.due;c.auto=1;bookC(c);cl.push(c)}
+    else if(pop&&c.s==="p"&&c.due===tmw)rm.push(c)
+  });
+  if(!cl.length&&!rm.length){cqSum();return}
+  save();render();cqSum();if($("qm").classList.contains("on"))drawQ();
+  var A=lang==="ar",who=function(c){return "#"+(c.n||"-")+(c.v?" ("+c.v+")":"")+" \u00b7 "+money(num(c.a))};
+  cl.forEach(function(c){NQ.push(A?"\u2705 \u062a\u0645 \u0635\u0631\u0641 \u0627\u0644\u0634\u064a\u0643 \u062a\u0644\u0642\u0627\u0626\u064a\u0627\u064b \u0628\u062a\u0627\u0631\u064a\u062e "+md(c.due)+"\n"+who(c):"\u2705 Check cleared automatically on "+md(c.due)+"\n"+who(c))});
+  rm.forEach(function(c){NQ.push(A?"\u23f0 \u062a\u0630\u0643\u064a\u0631: \u0634\u064a\u0643 \u0633\u064a\u064f\u0635\u0631\u0641 \u063a\u062f\u0627\u064b ("+md(c.due)+")\n"+who(c):"\u23f0 Reminder: a check will be cleared tomorrow ("+md(c.due)+")\n"+who(c))});
+  flushN()}
+function flushN(){if(NQ.length&&!$("modal").classList.contains("on")){var m=NQ.join("\n\n");NQ=[];note(m)}}
+/* ---- Language (Arabic / English) ---- */
+var AR={
+"Daily Income & Expense Tracker":"متتبع الدخل والمصروفات اليومية","Store name":"اسم المتجر",
+"Net profit":"صافي الربح","Cash net":"صافي الكاش","Credit net":"صافي البطاقة",
+"Expenses":"المصروفات","Cash":"كاش","Credit":"بطاقة","Total income":"إجمالي الدخل",
+"Start date for a new period":"تاريخ بداية فترة جديدة","Start new period":"ابدأ فترة جديدة",
+"Date":"التاريخ","Net income":"صافي الدخل","+ Add day":"+ إضافة يوم",
+"Checks":"الشيكات","Months":"الأشهر","Reports":"التقارير","Backup":"النسخ الاحتياطي",
+"Save as PDF":"حفظ كـ PDF","Clear all numbers":"مسح كل الأرقام","Previous months":"الأشهر السابقة",
+"↩ Back to current month":"↩ العودة للشهر الحالي","◀ Older":"▶ الأقدم","Newer ▶":"الأحدث ◀",
+"Export Excel (CSV)":"تصدير Excel (CSV)","Export backup":"تصدير نسخة احتياطية","Import backup":"استيراد نسخة احتياطية",
+"Tap the Expenses button on a day to list each expense and what it was for. Net income = credit + cash − expenses.":"اضغط على زر المصروفات في أي يوم لإدخال كل مصروف وسببه. صافي الدخل = البطاقة + الكاش − المصروفات.",
+"Version 3":"الإصدار 3","· backup works by copy & paste.":"· النسخ الاحتياطي يعمل بالنسخ واللصق.",
+"Pending":"القادمة","Cleared":"مصروفة","All":"الكل","+ Add check":"+ إضافة شيك","Close":"إغلاق",
+"Edit / postpone check":"تعديل / تأجيل الشيك","New check":"شيك جديد","Check number":"رقم الشيك",
+"Vendor / warehouse":"المورد / المستودع","Amount":"المبلغ","Date it will be cashed":"تاريخ الصرف",
+"Date written (purchase day)":"تاريخ كتابة الشيك (يوم الشراء)","Note (optional)":"ملاحظة (اختياري)",
+"Cancel":"إلغاء","Save":"حفظ","Done":"تم","+ Cash expense":"+ مصروف كاش","+ Credit expense":"+ مصروف بطاقة",
+"+ Check":"+ شيك","Confirm":"تأكيد","New expense type":"نوع مصروف جديد","Type name":"اسم النوع","Add":"إضافة",
+"Open":"فتح","Delete":"حذف","Delete day":"حذف اليوم","— Type —":"— النوع —","+ Add new type…":"+ إضافة نوع جديد…",
+"Food & supplies":"طعام ومستلزمات","Salaries":"رواتب","Rent":"إيجار","Utilities":"فواتير وخدمات",
+"Maintenance":"صيانة","Cleaning & packaging":"تنظيف وتغليف","Other":"أخرى",
+"⚠ OVERDUE":"⚠ متأخر","⚠ DUE TODAY":"⚠ يستحق اليوم","Cancelled":"ملغي","Delete check":"حذف الشيك","auto":"تلقائي","Delete this check permanently?":"حذف هذا الشيك نهائياً؟","Delete this check permanently? The expense booked for it will also be removed and the amount returns to that month.":"حذف هذا الشيك نهائياً؟ سيتم أيضاً حذف المصروف المسجل له ويرجع المبلغ إلى الشهر الذي صُرف فيه.","✓ Cleared":"✓ تم الصرف",
+"Edit / Postpone":"تعديل / تأجيل","Undo clearing":"التراجع عن الصرف","Restore":"استعادة","No checks here.":"لا توجد شيكات هنا.",
+"No previous months yet. When you start a new period, the old one is saved here.":"لا توجد أشهر سابقة بعد. عند بدء فترة جديدة تُحفظ القديمة هنا.",
+"⚠ No backup yet. Tap to back up now.":"⚠ لا توجد نسخة احتياطية بعد. اضغط لعمل نسخة الآن.",
+"⚠ No backup for over 7 days. Tap to back up now.":"⚠ لا توجد نسخة احتياطية منذ أكثر من 7 أيام. اضغط لعمل نسخة الآن.",
+"Tap Copy, then paste the text into Notes or a message to yourself. To restore later, use Import backup and paste it back. You can also try Download file.":"اضغط نسخ ثم الصق النص في الملاحظات أو في رسالة لنفسك. للاستعادة لاحقاً استخدم استيراد نسخة احتياطية والصق النص. ويمكنك أيضاً تحميل الملف.",
+"Copy":"نسخ","Copied ✓":"تم النسخ ✓","Press and hold to copy":"اضغط مطولاً للنسخ","Download file":"تحميل الملف",
+"Import":"استيراد","Choose file":"اختيار ملف",
+"Paste the backup text below, or choose a backup file. Then tap Import.":"الصق نص النسخة الاحتياطية أدناه أو اختر ملفاً ثم اضغط استيراد.",
+"Replace all":"استبدال الكل","Merge (keep mine, add missing months)":"دمج (إبقاء بياناتي وإضافة الأشهر الناقصة)",
+"Done. Open Previous months to see them.":"تم. افتح الأشهر السابقة لعرضها.",
+"This is your current period. Use the Back to current month button.":"هذه فترتك الحالية. استخدم زر العودة للشهر الحالي.",
+"Delete this saved period permanently?":"حذف هذه الفترة المحفوظة نهائياً؟",
+"Enter the amount and the date the check will be cashed.":"أدخل المبلغ وتاريخ صرف الشيك.",
+"Pick a start date first.":"اختر تاريخ البداية أولاً.",
+"You are viewing an older month. Tap Back to current month first.":"أنت تعرض شهراً قديماً. اضغط العودة للشهر الحالي أولاً.",
+"This month is complete. Go to the current month to continue.":"هذا الشهر مكتمل. انتقل إلى الشهر الحالي للمتابعة.",
+"Clear all numbers and expenses? Dates stay.":"مسح كل الأرقام والمصروفات؟ التواريخ تبقى.",
+"Could not save the PDF. Please try again.":"تعذر حفظ PDF. حاول مرة أخرى.",
+"A similar check already exists (same number, or same vendor, amount and date). Save anyway?":"يوجد شيك مشابه (نفس الرقم أو نفس المورد والمبلغ والتاريخ). حفظ على أي حال؟",
+"Replace ALL current data and previous months with this file?":"استبدال كل البيانات الحالية والأشهر السابقة بهذا الملف؟",
+"Could not read that file. Paste the backup text instead.":"تعذر قراءة الملف. الصق نص النسخة بدلاً من ذلك.",
+"This is not a valid backup. Paste the full backup text or choose a backup/CSV file exported from this tracker.":"هذه ليست نسخة احتياطية صالحة. الصق النص كاملاً أو اختر ملف نسخة/CSV مصدّر من هذا التطبيق.",
+"Cancel this check? It will not count as an expense.":"إلغاء هذا الشيك؟ لن يُحتسب كمصروف.",
+"Undo? The expense booked for this check will be removed.":"التراجع؟ سيتم حذف المصروف المسجل لهذا الشيك.",
+"Income & Expense Report":"تقرير الدخل والمصروفات","NET PROFIT":"صافي الربح","EXPENSES":"المصروفات",
+"TOTAL INCOME":"إجمالي الدخل","Income":"الدخل","Net inc.":"الصافي","Expense details":"تفاصيل المصروفات",
+"[Credit]":"[بطاقة]","[Cash]":"[كاش]","(no description)":"(بدون وصف)","current":"الحالي",
+"Net":"الصافي","Total":"الإجمالي","Pending checks":"شيكات قادمة"
+};
+var PT=[
+[/^(.*) – Daily Tracker$/,function(m){return m[1]+" – المتتبع اليومي"}],
+[/^(\d+) days?$/,function(m){return m[1]+" يوم"}],
+[/^(.*?)\s+\((\d+) days?\)$/,function(m){return m[1]+"  ("+m[2]+" يوم)"}],
+[/^(.*) \(current month\)$/,function(m){return m[1]+" (الشهر الحالي)"}],
+[/^Pending checks: (.*) \((\d+)\)(?: · (\d+) due now)? — tap to view$/,function(m){return "شيكات قادمة: "+m[1]+" ("+m[2]+")"+(m[3]?" · "+m[3]+" مستحقة الآن":"")+" — اضغط للعرض"}],
+[/^Expenses – (.*)$/,function(m){return "المصروفات – "+m[1]}],
+[/^(.* - )?Income & Expense Report$/,function(m){return (m[1]||"")+"تقرير الدخل والمصروفات"}],
+[/^Delete (.*) completely\?$/,function(m){return "حذف "+m[1]+" بالكامل؟"}],
+[/^Start a new period from (.*)\? The current days will be saved in Previous months\.$/,function(m){return "بدء فترة جديدة من "+m[1]+"؟ ستُحفظ الأيام الحالية في الأشهر السابقة."}],
+[/^Month complete\. It was saved in Previous months( and as a PDF)?\. A new month started\.$/,function(m){return "اكتمل الشهر. تم حفظه في الأشهر السابقة"+(m[1]?" وكملف PDF":"")+". بدأ شهر جديد."}],
+[/^Mark check #(.*) \((.*)\) as cleared\? It will be added to expenses on (.*)\.$/,function(m){return "تأكيد صرف الشيك #"+m[1]+" ("+m[2]+")؟ سيُضاف إلى المصروفات بتاريخ "+m[3]+"."}],
+[/^✓ Cleared (.*)$/,function(m){return "✓ تم الصرف "+m[1]}],
+[/^Written (.*)$/,function(m){return "كُتب في "+m[1]}],
+[/^postponed from (.*)$/,function(m){return "مؤجل من "+m[1]}],
+[/^Total \((?:all (\d+)|(\d+) selected)\)$/,function(m){return "الإجمالي ("+(m[1]?"الكل "+m[1]:m[2]+" محدد")+")"}],
+[/^File has a current period \((.*)\) and (\d+) previous month\(s\)\. Choose how to import\.$/,function(m){return "الملف يحتوي فترة حالية ("+m[1]+") و"+m[2]+" شهر سابق. اختر طريقة الاستيراد."}]
+];
+function core1(c){
+  if(/^[-$\d,.\s]+$/.test(c))return c;
+  if(AR.hasOwnProperty(c))return AR[c];
+  for(var i=0;i<PT.length;i++){var m=c.match(PT[i][0]);if(m)return PT[i][1](m)}
+  if(c.indexOf("·")>=0)return c.split("·").map(trs).join("·");
+  var m2=c.match(/^([^:]{1,40}): ([\s\S]*)$/);if(m2&&AR.hasOwnProperty(m2[1]))return AR[m2[1]]+": "+trs(m2[2]);
+  var m3=c.match(/^(Cash|Credit|Expenses|Net) ([\s\S]*)$/);if(m3)return AR[m3[1]]+" "+m3[2];
+  return c}
+function trs(s){var m=String(s).match(/^(\s*)([\s\S]*?)(\s*)$/);if(!m[2])return s;return m[1]+core1(m[2])+m[3]}
+function tr(s){return lang==="ar"?trs(s):s}
+function pn(n){var p=n.parentNode;if(!p||p.nodeName==="SCRIPT"||p.nodeName==="STYLE"||p.nodeName==="TEXTAREA"||p.id==="lg")return;
+  if(n.__en===undefined||n.nodeValue!==n.__tr)n.__en=n.nodeValue;
+  var w=tr(n.__en);n.__tr=w;if(n.nodeValue!==w)n.nodeValue=w}
+function pa(e){["placeholder","title"].forEach(function(a){if(!e.hasAttribute(a))return;
+  var cv=e.getAttribute(a);if(e["__o"+a]===undefined||cv!==e["__t"+a])e["__o"+a]=cv;
+  var w=tr(e["__o"+a]);e["__t"+a]=w;if(cv!==w)e.setAttribute(a,w)})}
+function walk(n){
+  if(n.nodeType===3){pn(n);return}
+  if(n.nodeType!==1||n.nodeName==="SCRIPT"||n.nodeName==="STYLE")return;
+  pa(n);n.querySelectorAll("[placeholder],[title]").forEach(pa);
+  var w=document.createTreeWalker(n,4),t,L=[];while(t=w.nextNode())L.push(t);L.forEach(pn)}
+function applyDir(){var h=document.documentElement;h.setAttribute("lang",lang);h.setAttribute("dir",lang==="ar"?"rtl":"ltr");
+  $("lg").textContent=lang==="ar"?"English":"عربي";document.title=tr("Daily Income & Expense Tracker")}
+$("lg").onclick=function(){lang=lang==="ar"?"en":"ar";try{localStorage.setItem("daily-tracker-lang",lang)}catch(e){}
+  applyDir();walk(document.body);render()};
+applyDir();
+new MutationObserver(function(rs){rs.forEach(function(r){if(r.type==="characterData")pn(r.target);else r.addedNodes.forEach(walk)})}).observe(document.body,{childList:true,characterData:true,subtree:true});
+walk(document.body);
+
+$("start").value=iso(new Date());
+render();
+arch.forEach(function(p){delete p.cur});if(!curOf(allP()).v)goto(curOf(allP()));
+autoClear(true);setInterval(function(){autoClear(false)},60000);setInterval(flushN,2000);document.addEventListener("visibilitychange",function(){if(!document.hidden)autoClear(true)});
+</script>
+</body>
+</html>

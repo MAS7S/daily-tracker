@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/ledgers/main {
+      function owner() { return request.auth != null && request.auth.uid == uid; }
+      allow read: if owner();
+      allow create, update: if owner()
+        && request.resource.data.keys().hasOnly(['revision','parts'])
+        && request.resource.data.revision is string
+        && request.resource.data.parts is int
+        && request.resource.data.parts >= 1 && request.resource.data.parts <= 160;
+      match /parts/{part} {
+        allow read, delete: if owner();
+        allow create, update: if owner()
+          && request.resource.data.keys().hasOnly(['text','revision'])
+          && request.resource.data.text is string && request.resource.data.revision is string;
+      }
+    }
+  }
+}
