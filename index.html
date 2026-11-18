@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -11,37 +11,309 @@
 <meta name="apple-mobile-web-app-title" content="Daily Tracker">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
-<link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
 <title>Daily Income &amp; Expense Tracker</title>
+
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f1f7f4;color:#12372b;font:16px/1.55 system-ui,sans-serif;min-height:100vh;display:grid;place-items:center}
-main{width:min(92%,390px);margin:30px auto;padding:28px;background:white;border:1px solid #ccded6;border-radius:20px}h1{font-size:1.45rem;margin:.6em 0}label{display:block;font-weight:600;margin:.8em 0 .25em}input,button{font:inherit;border:1px solid #9bb9aa;border-radius:9px;padding:9px}input{width:100%}button{background:white;color:#134737;cursor:pointer}button:disabled{opacity:.55}form button,#google{width:100%;margin-top:8px}#login{background:#076747;color:white}#status{font-size:.84rem;margin:0;overflow-wrap:anywhere}#bar{padding:6px 12px;background:#fff;border-bottom:1px solid #d4e5dc;display:flex;align-items:center;gap:8px;flex-wrap:wrap}#bar button{font-size:.78rem;padding:4px 9px}#emailDisplay{margin-inline-start:auto;font-size:.75rem;overflow-wrap:anywhere}
-#workspace{position:fixed;inset:0;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top);background:#fff}iframe{border:0;flex:1;width:100%;min-height:0}[hidden]{display:none!important}#message{color:#873c16;white-space:pre-line}img{border-radius:14px}.action{display:flex;gap:6px;flex-wrap:wrap}#choices{padding:8px;background:#fff5de}
-dialog{width:min(94vw,460px);max-height:88vh;overflow:auto;border:1px solid #b8c9bf;border-radius:16px;padding:20px}dialog::backdrop{background:#1237}dialog header,.member{display:flex;align-items:center;justify-content:space-between;gap:8px}.member{padding:6px;border-bottom:1px solid #ddd}.member bdi{overflow-wrap:anywhere}dialog select{font:inherit;max-width:100%}dialog h3{margin:4px 0}dialog form button{margin-top:8px}dialog hr{margin:16px 0;border:0;border-top:1px solid #ddd}</style>
+*{box-sizing:border-box}
+body{margin:0;background:#f1f7f4;color:#14392c;font:16px/1.5 system-ui,sans-serif}
+main,dialog{width:min(94%,410px);padding:24px;background:white;border:1px solid #cbded3;border-radius:16px}
+main{margin:6vh auto}
+h1{font-size:1.45rem}
+label{display:block;margin-top:12px}
+input,button,select{font:inherit;padding:8px;border:1px solid #9bb9aa;border-radius:8px}
+input{width:100%}
+button{cursor:pointer;background:white;color:#14543b}
+main button,dialog button{margin-top:8px}
+form button,#google{width:100%}
+#login{background:#076747;color:white}
+#language{float:inline-end}
+#message,#status,#adminMessage,#authFeedback{white-space:pre-wrap;overflow-wrap:anywhere}
+#workspace{position:fixed;inset:0;display:flex;flex-direction:column;background:white}
+#bar,#choices{padding:8px;background:#f1f7f4}
+#bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+#bar p{margin:0}
+#emailDisplay{margin-inline-start:auto}
+#bar button{font-size:.85rem}
+iframe{width:100%;flex:1;min-height:0;border:0}
+dialog{max-height:85vh;overflow:auto}
+.member{display:flex;align-items:center;justify-content:space-between;gap:6px}
+[hidden]{display:none!important}
+</style>
+
 <script defer src="./vendor/firebase-app-compat.js"></script>
 <script defer src="./vendor/firebase-auth-compat.js"></script>
 <script defer src="./vendor/firebase-firestore-compat.js"></script>
 <script defer src="./firebase-config.js"></script>
 <script defer src="./cloud.js"></script>
 </head>
+
 <body>
 <main id="gate">
-<img src="./icons/icon-192.png" width="54" height="54" alt="">
-<h1 lang="en" dir="ltr">Daily Income &amp; Expense Tracker</h1>
-<p>سجّل الدخول لفتح دفترك ومزامنته بين أجهزتك.</p>
-<button id="google" lang="en">Sign in with Google</button>
-<form id="authForm"><label for="email">البريد الإلكتروني</label><input id="email" dir="ltr" type="email" autocomplete="username" required>
-<label for="password">كلمة المرور</label><input id="password" dir="ltr" type="password" autocomplete="current-password" required>
-<button id="login" type="submit">تسجيل الدخول</button><button id="create" type="submit">إنشاء حساب</button></form>
-<div id="accountActions" hidden><button id="verify">إرسال رابط تأكيد البريد</button> <button id="checkAccess">تحقق من الوصول</button> <button id="leave">خروج</button></div><p role="status" id="message">جارٍ التحميل…</p><noscript>فعّل JavaScript لتشغيل التطبيق.</noscript>
+  <button id="language" type="button">العربية</button>
+  <img src="./icons/icon-192.png" width="52" height="52" alt="">
+
+  <h1 data-ar="متتبع الدخل والمصروفات اليومية">
+    Daily Income &amp; Expense Tracker
+  </h1>
+  <p data-ar="سجّل الدخول لفتح دفترك ومزامنته بين أجهزتك.">
+    Sign in to open your ledger and sync across devices.
+  </p>
+
+  <button id="google" type="button" data-ar="تسجيل الدخول باستخدام Google">Sign in with Google</button>
+
+  <form id="authForm">
+    <label for="email" data-ar="البريد الإلكتروني">Email</label>
+    <input id="email" type="email" dir="ltr" autocomplete="username" required>
+
+    <label for="password" data-ar="كلمة المرور">Password</label>
+    <input id="password" type="password" dir="ltr" autocomplete="current-password" required>
+
+    <button id="login" type="submit" data-ar="تسجيل الدخول">Sign in</button>
+    <button id="create" type="submit" data-ar="إنشاء حساب">Create account</button>
+    <button id="forgot" type="button" data-ar="نسيت كلمة المرور">Forgot password</button>
+  </form>
+
+  <div id="accountActions" hidden>
+    <button id="verify" data-ar="إرسال رابط تأكيد البريد">Send verification email</button>
+    <button id="checkAccess" data-ar="تحقق من الوصول">Check access</button>
+    <button id="leave" data-ar="خروج">Sign out</button>
+  </div>
+
+  <p role="status" id="message"></p>
+  <p role="alert" id="authFeedback"></p>
+  <noscript>Enable JavaScript to use Daily Tracker.</noscript>
 </main>
-<section id="workspace" hidden><header id="bar"><p id="status" role="status"></p><span id="emailDisplay"></span><span id="branchLabel"></span><button hidden id="share">مشاركة وإدارة الفروع</button><button id="retry">تحديث</button><button id="logout">خروج</button></header>
-<div id="choices" hidden><p id="conflictText"></p><div class="action"><button id="download">تنزيل نسخة الجهاز</button><button id="accept">فتح نسخة السحابة</button><button id="replace">استخدام نسخة الجهاز</button></div></div>
-<dialog id="adminPanel"><header><h3>مشاركة الفرع</h3><button id="closePanel">تم</button></header>
-<label>الفرع الحالي <select id="branch"></select></label>
-<p>مالك الفرع <bdi id="branchOwner"></bdi></p><h4>الأعضاء وصلاحية التعديل</h4><section id="members"></section>
-<form id="assign"><label>إضافة بريد أو نقله إلى هذا الفرع<input type="email" required id="memberEmail" dir="ltr"></label><button>حفظ وتفعيل</button></form>
-<hr><h3>الإدارة · ملاك الفروع المعتمدون</h3><div id="owners"></div><h4>اعتماد مالك فرع جديد</h4><form id="newBranch"><label>اسم الفرع<input id="branchName" maxlength="100" required></label><label>بريد المالك<input type="email" required id="ownerEmail" dir="ltr"></label><button>إنشاء الفرع واعتماد المالك</button></form>
-<p role="status" id="adminMessage"></p></dialog>
-<iframe id="ledger" title="Daily Tracker"></iframe></section>
-</body></html>
+
+<section id="workspace" hidden>
+  <header id="bar">
+    <p id="status" role="status"></p>
+    <span id="emailDisplay"></span>
+    <span id="branchLabel"></span>
+    <button hidden id="share" data-ar="مشاركة وإدارة الفروع">Manage stores</button>
+    <button id="retry" data-ar="تحديث">Refresh</button>
+    <button id="logout" data-ar="خروج">Sign out</button>
+  </header>
+
+  <div id="choices" hidden>
+    <p id="conflictText"></p>
+    <button id="download" data-ar="تنزيل نسخة الجهاز">Download device copy</button>
+    <button id="accept" data-ar="فتح نسخة السحابة">Open cloud copy</button>
+    <button id="replace" data-ar="استخدام نسخة الجهاز">Use device copy</button>
+  </div>
+
+  <dialog id="adminPanel">
+    <h3 data-ar="مشاركة الفرع">Share store</h3>
+    <button id="closePanel" data-ar="تم">Done</button>
+
+    <label>
+      <span data-ar="الفرع الحالي">Current store</span>
+      <select id="branch"></select>
+    </label>
+
+    <p><span data-ar="مالك الفرع">Store owner</span> <bdi id="branchOwner"></bdi></p>
+    <h4 data-ar="الأعضاء وصلاحية التعديل">Members and access</h4>
+    <section id="members"></section>
+
+    <form id="assign">
+      <label>
+        <span data-ar="إضافة بريد أو نقله إلى هذا الفرع">Add or transfer email to this store</span>
+        <input type="email" required id="memberEmail" dir="ltr">
+      </label>
+      <button data-ar="حفظ وتفعيل">Save and enable</button>
+    </form>
+
+    <hr>
+    <h3 data-ar="ملاك الفروع المعتمدون">Approved store owners</h3>
+    <div id="owners"></div>
+
+    <h4 data-ar="اعتماد مالك فرع جديد">Approve a new store owner</h4>
+    <form id="newBranch">
+      <label>
+        <span data-ar="اسم الفرع">Store name</span>
+        <input id="branchName" maxlength="100" required>
+      </label>
+      <label>
+        <span data-ar="بريد المالك">Owner email</span>
+        <input id="ownerEmail" type="email" dir="ltr" required>
+      </label>
+      <button data-ar="إنشاء الفرع واعتماد المالك">Create store and approve owner</button>
+    </form>
+
+    <p role="status" id="adminMessage"></p>
+  </dialog>
+
+  <iframe id="ledger" title="Daily Tracker"></iframe>
+</section>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const el = id => document.getElementById(id);
+  const key = "daily-tracker-lang";
+  let lang = localStorage.getItem(key) === "ar" ? "ar" : "en";
+
+  const choose = (en, ar) => lang === "ar" ? ar : en;
+  const labels = [...document.querySelectorAll("[data-ar]")];
+
+  labels.forEach(node => {
+    node.dataset.en = node.textContent.trim();
+  });
+
+  // Translate sign-in and access messages emitted by the existing cloud.js.
+  const messages = [
+    ["جارٍ تسجيل الدخول…", "Signing in…"],
+    ["جارٍ التحقق من صلاحية الدخول…", "Checking access…"],
+    ["أكّد بريدك ثم اضغط تحقق من الوصول.", "Verify your email, then select Check access."],
+    ["أرسلنا رابط التأكيد إلى بريدك.", "Verification email sent."],
+    ["الوصول إلى هذا الفرع غير مفعّل. تواصل مع المدير.", "Store access is disabled. Contact your administrator."],
+    ["أضف إعدادات مشروع Firebase الجديد إلى firebase-config.js لتفعيل تسجيل الدخول.", "Add your Firebase web app configuration to firebase-config.js."],
+    ["استخدم إعدادات مشروع Firebase الجديد المستقل.", "Use the configuration for your separate Firebase project."],
+    ["افتح التطبيق في متصفح حديث.", "Open the app in a current browser."],
+    ["أغلق نافذة الدفتر الأخرى ثم اضغط تحقق من الوصول.", "Close the other ledger window, then select Check access."],
+    ["يلزم اتصال لتأكيد صلاحيات الفروع.", "Connect to the internet to verify store access."],
+    ["يلزم اتصال للتحقق من صلاحية الفرع.", "Connect to the internet to check this store’s access."],
+    ["انقطع الاتصال. يُفتح الدفتر بعد التحقق مجددًا من صلاحية الفرع.", "You are offline. Reconnect to verify access."],
+    ["تعذّر تجهيز التطبيق للعمل دون اتصال. افتحه عبر HTTPS ثم أعد المحاولة.", "Offline setup failed. Open the app over HTTPS and retry."],
+    ["تعذّر بدء التطبيق. ", "App startup failed. "],
+    ["تعذّر تسجيل الدخول. ", "Sign-in failed. "]
+  ];
+
+  function translateMessage() {
+    const node = el("message");
+
+    for (const [ar, en] of messages) {
+      const from = choose(ar, en);
+      const to = choose(en, ar);
+
+      if (node.textContent.startsWith(from)) {
+        node.textContent = to + node.textContent.slice(from.length);
+        break;
+      }
+    }
+  }
+
+  let detail = ["", ""];
+
+  function show(en, ar) {
+    detail = [en, ar];
+    el("authFeedback").textContent = choose(en, ar);
+  }
+
+  function paint() {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = choose("ltr", "rtl");
+
+    labels.forEach(node => {
+      node.textContent = node.dataset[lang];
+    });
+
+    el("language").textContent = choose("العربية", "English");
+    el("authFeedback").textContent = choose(...detail);
+    translateMessage();
+  }
+
+  new MutationObserver(translateMessage).observe(el("message"), {
+    childList: true
+  });
+
+  el("language").disabled = false;
+  el("language").onclick = () => {
+    lang = choose("ar", "en");
+    localStorage.setItem(key, lang);
+    paint();
+  };
+
+  // The ledger uses the same saved language. Its toggle updates this page too.
+  window.addEventListener("storage", event => {
+    if (event.key === key) {
+      lang = event.newValue === "ar" ? "ar" : "en";
+      paint();
+    }
+  });
+
+  paint();
+
+  let authClient;
+
+  try {
+    authClient = firebase.auth();
+  } catch (error) {
+    console.error("Firebase startup", error);
+    show(
+      "Firebase setup failed. Check firebase-config.js and vendor/. " + error.message,
+      "تعذّر تشغيل Firebase. تحقق من ملفات الإعداد والمكتبات. " + error.message
+    );
+    return;
+  }
+
+  function report(error) {
+    console.error("Firebase Authentication", error);
+
+    const text = [error.code, error.message].filter(Boolean).join(" — ");
+    let en = "Authentication failed.";
+    let ar = "تعذّرت المصادقة.";
+
+    if (error.code === "auth/unauthorized-domain") {
+      en = "Add " + location.hostname +
+        " under Firebase Authentication → Settings → Authorized domains.";
+      ar = "أضف " + location.hostname +
+        " إلى Authorized domains في إعدادات Firebase Authentication.";
+    } else if (error.code === "auth/popup-blocked") {
+      en = "Allow pop-ups for this site and try again, or sign in with email.";
+      ar = "اسمح بالنوافذ المنبثقة لهذا الموقع وأعد المحاولة، أو ادخل بالبريد.";
+    }
+
+    show(en + " " + text, ar + " " + text);
+  }
+
+  async function run(action) {
+    const buttons = [...el("gate").querySelectorAll("button")]
+      .filter(button => button.id !== "language");
+
+    buttons.forEach(button => { button.disabled = true; });
+    el("message").textContent = "";
+    show("", "");
+
+    try {
+      await action();
+    } catch (error) {
+      report(error);
+    } finally {
+      buttons.forEach(button => { button.disabled = false; });
+    }
+  }
+
+  el("google").onclick = () => run(() =>
+    authClient.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+  );
+
+  el("authForm").onsubmit = event => {
+    event.preventDefault();
+
+    const method = event.submitter?.id === "create"
+      ? "createUserWithEmailAndPassword"
+      : "signInWithEmailAndPassword";
+
+    run(() => authClient[method](
+      el("email").value.trim(),
+      el("password").value
+    ));
+  };
+
+  el("forgot").onclick = () => {
+    if (!el("email").reportValidity()) return;
+
+    run(async () => {
+      authClient.languageCode = lang;
+      await authClient.sendPasswordResetEmail(el("email").value.trim());
+
+      show(
+        "Check your inbox for a password reset link.",
+        "تحقّق من بريدك للحصول على رابط إعادة تعيين كلمة المرور."
+      );
+    });
+  };
+});
+</script>
+</body>
+</html>
