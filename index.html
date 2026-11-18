@@ -95,15 +95,21 @@
     }
 
     #bar {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
+      display: grid;
+      gap: 4px;
+      padding: 7px 10px;
     }
-
-    #bar p { margin: 0; }
-    #emailDisplay { margin-inline-start: auto; }
-    #bar button { font-size: .85rem; }
+    .bar-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    #bar p { margin: 0; font-size: .78rem; overflow-wrap: anywhere; }
+    #status { flex: 1; }
+    #status[data-saved="true"]::before {
+      content: ""; display: inline-block; width: 7px; height: 7px;
+      border-radius: 50%; background: #15954c; margin-inline-end: 5px;
+    }
+    #profileName { min-width: 0; overflow-wrap: anywhere; font-weight: 600; font-size: .85rem; }
+    #bar button { font-size: .76rem; padding: 3px 8px; min-height: 32px; }
+    #bar #share { background: #076747; color: white; border-color: #076747; }
+    #activeBranch { max-width: 45%; font: inherit; font-size: .76rem; }
 
     iframe {
       width: 100%;
@@ -182,16 +188,20 @@
 
   <section id="workspace" hidden>
     <header id="bar">
-      <p id="status" role="status"></p>
-      <bdi id="profileName"></bdi>
-      <button id="editName" data-ar="تعديل الاسم">Edit name</button>
-      <span id="emailDisplay"></span>
-      <span id="branchLabel"></span>
-      <select id="activeBranch" aria-label="Store / الفرع" hidden></select>
-      <button id="useInvite" data-ar="إنشاء فرعي" hidden>Create my store</button>
-      <button hidden id="share" data-ar="مشاركة وإدارة الفروع">Manage stores</button>
-      <button id="retry" data-ar="تحديث">Refresh</button>
-      <button id="logout" data-ar="خروج">Sign out</button>
+      <div class="bar-row">
+        <p id="status" role="status"></p>
+        <button hidden id="retry" data-ar="تحديث">Refresh</button>
+        <button hidden id="share" data-ar="مشاركة">Share</button>
+        <button id="logout" data-ar="خروج">Sign out</button>
+      </div>
+      <div class="bar-row">
+        <bdi id="profileName"></bdi>
+        <button id="editName" data-ar="تعديل الاسم">Edit name</button>
+        <span id="emailDisplay" hidden></span>
+        <span id="branchLabel" hidden></span>
+        <select id="activeBranch" aria-label="Store / الفرع" hidden></select>
+        <button id="useInvite" data-ar="إنشاء فرعي" hidden>Create my store</button>
+      </div>
     </header>
 
     <div id="choices" hidden>
@@ -205,46 +215,29 @@
       <h3 data-ar="مشاركة الفرع">Share store</h3>
       <button id="closePanel" data-ar="تم">Done</button>
 
-      <label>
-        <span data-ar="الفرع الحالي">Current store</span>
-        <select id="branch"></select>
-      </label>
-
-      <p><span data-ar="مالك الفرع">Store owner</span> <bdi id="branchOwner"></bdi></p>
-      <h4 data-ar="الأعضاء وصلاحية التعديل">Members and access</h4>
-      <section id="members"></section>
-
-      <form id="assign">
-        <label>
-          <span data-ar="بريد العامل">Worker email</span>
-          <input type="email" required id="memberEmail" dir="ltr">
+      <section id="ownStore" hidden>
+        <label id="shareBranchPicker" hidden>
+          <span data-ar="الفرع الحالي">Current store</span>
+          <select id="branch"></select>
         </label>
-        <button data-ar="حفظ وتفعيل">Save and enable</button>
-      </form>
-
-      <section id="adminOnly" hidden>
-        <hr>
-        <button id="ownerToggle" type="button"></button>
-        <form id="transferStore">
-          <label><span data-ar="بريد المالك الجديد للفرع الحالي">New owner email for selected store</span>
-            <input id="transferEmail" type="email" dir="ltr" required>
+        <p><span data-ar="فريق الفرع">Store team</span> <bdi id="branchOwner" hidden></bdi></p>
+        <section id="members"></section>
+        <form id="assign">
+          <label>
+            <span data-ar="بريد العامل">Worker email</span>
+            <input type="email" required id="memberEmail" dir="ltr">
           </label>
-          <button data-ar="نقل ملكية الفرع">Transfer ownership</button>
+          <button data-ar="حفظ وتفعيل">Save and enable</button>
         </form>
-        <hr>
+      </section>
+      <section id="adminOnly" hidden>
         <form id="inviteOwner">
-          <label><span data-ar="بريد صاحب الدعوة">Invitee email</span>
+          <label><span data-ar="بريد الشخص الذي توافق له على إنشاء فرع خاص به">Email of the person you want to approve</span>
             <input id="ownerEmail" type="email" dir="ltr" required>
           </label>
           <button data-ar="السماح بإنشاء فرع واحد">Approve one store</button>
         </form>
         <div id="owners"></div>
-        <form id="newBranch">
-          <label><span data-ar="اسم الفرع">Store name</span>
-            <input id="branchName" maxlength="100" required>
-          </label>
-          <button data-ar="إنشاء فرع باسمي">Create a store I own</button>
-        </form>
       </section>
 
       <p role="status" id="adminMessage"></p>
