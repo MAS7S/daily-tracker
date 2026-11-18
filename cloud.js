@@ -1,7 +1,12 @@
 "use strict";
 const byId = id => document.getElementById(id);
 const gate = byId("gate"), workspace = byId("workspace"), frame = byId("ledger");
-const statusText = value => { byId("status").textContent = value; };
+const statusText = value => {
+  const saved = value === "تمت المزامنة";
+  byId("status").textContent = saved ? t("Saved to cloud", value) : value;
+  byId("status").dataset.saved = String(saved);
+  byId("retry").hidden = !session || saved;
+};
 const message = value => { byId("message").textContent = value; };
 const config = window.firebaseConfig;
 const prefix = "daily-tracker:" + location.pathname.replace(/index\.html$/, "") + ":" + config.projectId + ":";
@@ -232,14 +237,16 @@ function deny(reason) {
     : reason);
 }
 function manages(id) {
-  return stores.has(id) && (adminMode || owned.has(id));
+  return stores.has(id) && owned.has(id);
 }
 function renderPanel() {
   const current = stores.get(wanted);
+  byId("ownStore").hidden = !manages(wanted);
   const branch = byId("branch");
   branch.replaceChildren(...[...stores].filter(([id]) => manages(id))
     .map(([id, store]) => new Option(store.name, id)));
   branch.value = wanted;
+  byId("shareBranchPicker").hidden = branch.options.length < 2;
   byId("branchOwner").textContent = current?.ownerEmail || "";
   const members = byId("members");
   members.replaceChildren();
@@ -256,10 +263,6 @@ function renderPanel() {
     members.append(row);
   }
   if (!members.childElementCount) members.textContent = t("No workers yet.", "لا يوجد عمّال بعد.");
-  const toggle = byId("ownerToggle");
-  toggle.hidden = !current || current.ownerEmail === ADMIN;
-  const ownerEnabled = current?.ownerActive ?? (accounts.get(current?.ownerEmail)?.active === true);
-  toggle.textContent = ownerEnabled ? t("Disable owner", "تعطيل المالك") : t("Enable owner", "تفعيل المالك");
   const owners = byId("owners");
   owners.replaceChildren();
   for (const [email, approval] of invitations) {
@@ -280,11 +283,11 @@ function renderToolbar() {
   selector.replaceChildren(...[...stores].map(([id, store]) => new Option(store.name, id)));
   selector.value = wanted;
   selector.hidden = stores.size < 2;
-  byId("share").hidden = !manages(wanted);
+  byId("share").hidden = !adminMode && !manages(wanted);
   byId("useInvite").hidden = adminMode || !invite?.pendingStoreId;
   byId("profileName").textContent = profileName;
   byId("emailDisplay").textContent = auth.currentUser?.email || "";
-  if (byId("adminPanel").open && !manages(wanted)) byId("adminPanel").close();
+  if (byId("adminPanel").open && !adminMode && !manages(wanted)) byId("adminPanel").close();
 }
 function listenMembers() {
   stopMembers?.();
@@ -327,13 +330,13 @@ async function refreshView() {
   if (!user) return;
   stores.clear();
   for (const [id, store] of owned) {
-    const allowed = adminMode || (store.ownerActive ?? (grant?.active && grant.storeId === id));
+    const allowed = store.ownerActive ?? (adminMode || (grant?.active && grant.storeId === id));
     if (allowed) stores.set(id, store);
   }
   if (worker && grant?.active && worker.id === grant.storeId && worker.store.ownerEmail !== directEmail) {
     stores.set(worker.id, worker.store);
   }
-  if (!stores.size && !invite?.pendingStoreId) {
+  if (!adminMode && !stores.size && !invite?.pendingStoreId) {
     deny("permission-denied");
     return;
   }
@@ -342,7 +345,7 @@ async function refreshView() {
     nameLoading = true;
     try {
       const snap = await profileRef(user).get({source: "server"});
-      if (token !== identity || (!stores.size && !invite?.pendingStoreId)) return;
+      if (token !== identity || (!adminMode && !stores.size && !invite?.pendingStoreId)) return;
       profileName = snap.data()?.name || "";
       if (!profileName) {
         byId("userName").value = user.displayName || "";
@@ -365,7 +368,7 @@ async function refreshView() {
     workspace.hidden = false;
     gate.hidden = true;
     byId("branchLabel").textContent = "";
-    statusText(t("You have approval to create one store.", "لديك موافقة لإنشاء فرع واحد."));
+    statusText(adminMode ? "" : t("You have approval to create one store.", "لديك موافقة لإنشاء فرع واحد."));
     renderToolbar();
   }
 }
@@ -403,7 +406,7 @@ async function startAccess(user) {
       }
       apply(snap);
       received.add(key);
-      ready = adminMode ? received.has("owned") : ["owned", "grant", "invite"].every(k => received.has(k));
+      ready = received.has("owned") && (adminMode || ["grant", "invite"].every(k => received.has(k)));
       if (key === "grant" && grant?.active && !owned.has(grant.storeId) && !worker) return;
       if (ready) void refreshView();
     }, fail));
@@ -411,12 +414,6 @@ async function startAccess(user) {
   try {
     const collection = db.collection("restaurants");
     if (adminMode) {
-      await db.runTransaction(async tx => {
-        if (!(await tx.get(storeRef("main"))).exists) {
-          tx.set(storeRef("main"), {name: "Main store", ownerEmail: ADMIN, ownerActive: true});
-        }
-      });
-      if (!current()) return;
       listen("invites", db.collection("ownerInvites"), snap => {
         invitations.clear();
         snap.forEach(doc => invitations.set(doc.id, doc.data()));
@@ -444,7 +441,7 @@ async function startAccess(user) {
         });
       });
     }
-    listen("owned", adminMode ? collection : collection.where("ownerEmail", "==", email), snap => {
+    listen("owned", collection.where("ownerEmail", "==", email), snap => {
       owned.clear();
       snap.forEach(doc => owned.set(doc.id, doc.data()));
     });
@@ -507,14 +504,17 @@ byId("verify").onclick = async () => {
 };
 byId("leave").onclick = () => auth.signOut().catch(error => message(error.code));
 byId("share").onclick = () => {
-  if (!manages(wanted)) return;
+  if (!adminMode && !manages(wanted)) return;
   byId("adminMessage").textContent = "";
   renderPanel();
   byId("adminPanel").showModal();
 };
 byId("closePanel").onclick = () => byId("adminPanel").close();
 byId("activeBranch").onchange = byId("branch").onchange = event => selectStore(event.target.value);
-document.addEventListener("tracker-language", renderPanel);
+document.addEventListener("tracker-language", () => {
+  renderPanel();
+  if (byId("status").dataset.saved === "true") statusText("تمت المزامنة");
+});
 
 onSubmit("assign", async () => {
   const email = readEmail("memberEmail");
@@ -526,32 +526,16 @@ onSubmit("assign", async () => {
   const ref = accessRef(email);
   const grant = {storeId: id, active: true};
   try {
-    if (adminMode) {
-      await db.runTransaction(async tx => {
-        const existing = (await tx.get(ref)).data();
-        if (existing && existing.storeId !== id) {
-          throw Error(t("This worker already belongs to another store.",
-            "هذا العامل مسند إلى فرع آخر."));
-        }
-        tx.set(ref, grant);
-      });
-    } else {
-      await ref.set(grant);
-    }
+    await ref.set(grant);
   } catch (error) {
-    if (error.code !== "permission-denied" || adminMode) throw error;
-    throw Error(t("Unable to add this worker. Ask the administrator to check their assignment.",
-      "تعذّرت إضافة العامل. اطلب من مدير المشروع التحقق من الفرع المسند إليه."));
+    if (error.code !== "permission-denied") throw error;
+    throw Error(t("This worker may already belong to another store.",
+      "تعذّرت إضافة العامل. قد يكون مسندًا إلى فرع آخر."));
   }
-});
-onSubmit("newBranch", async () => {
-  await db.collection("restaurants").doc().set({
-    name: readName("branchName"), ownerEmail: ADMIN, ownerActive: true
-  });
 });
 onSubmit("inviteOwner", async () => {
   const email = readEmail("ownerEmail");
-  if (email === ADMIN) throw Error(t("Use Create a store I own.", "استخدم إنشاء فرع باسمي."));
+  if (email === ADMIN) throw Error(t("Enter the invitee’s email.", "أدخل بريد الشخص المدعو."));
   const ref = inviteRef(email);
   const id = db.collection("restaurants").doc().id;
   await db.runTransaction(async tx => {
@@ -560,27 +544,6 @@ onSubmit("inviteOwner", async () => {
       throw Error(t("This email already has one unused approval.", "لهذا البريد موافقة واحدة لم تُستخدم بعد."));
     }
     tx.set(ref, {pendingStoreId: id});
-  });
-});
-byId("ownerToggle").onclick = () => {
-  const store = stores.get(wanted);
-  if (!adminMode || !store || store.ownerEmail === ADMIN) return;
-  const active = store.ownerActive ?? (accounts.get(store.ownerEmail)?.active === true);
-  void adminAction(() => storeRef(wanted).update({ownerActive: !active}));
-};
-onSubmit("transferStore", async () => {
-  const email = readEmail("transferEmail");
-  const target = storeRef(wanted);
-  if (!confirm(t("Transfer this store and its ledger to " + email + "?",
-    "نقل هذا الفرع ودفتره إلى " + email + "؟"))) return;
-  await db.runTransaction(async tx => {
-    const snap = await tx.get(target);
-    if (!snap.exists) throw Error(t("Store not found.", "الفرع غير موجود."));
-    const previous = snap.data().ownerEmail;
-    if (previous === email) throw Error(t("This email already owns the store.", "هذا البريد يملك الفرع بالفعل."));
-    const previousGrant = previous === ADMIN ? null : await tx.get(accessRef(previous));
-    if (previousGrant?.data()?.storeId === target.id) tx.delete(previousGrant.ref);
-    tx.update(target, {ownerEmail: email, ownerActive: true});
   });
 });
 byId("useInvite").onclick = () => {
