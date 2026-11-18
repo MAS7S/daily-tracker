@@ -1,4 +1,4 @@
-const VERSION = "2026-11-18.login.3";
+const VERSION = "2026-11-18.login.4";
 const SCOPE = self.registration.scope;
 const PREFIX = "daily-tracker/" + SCOPE + "/";
 const CACHE = PREFIX + VERSION;
@@ -34,9 +34,7 @@ self.addEventListener("install", event => {
 
 self.addEventListener("activate", event => {
   event.waitUntil((async () => {
-    const keys = await caches.keys();
-
-    for (const key of keys) {
+    for (const key of await caches.keys()) {
       if (key.startsWith(PREFIX) && key !== CACHE) {
         await caches.delete(key);
       }
