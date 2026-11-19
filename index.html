@@ -112,7 +112,6 @@
     .access-buttons { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; max-width: 100%; }
     .access-buttons:has(> button[hidden]:first-child) { display: none; }
     #bar .bar-row:first-child { flex-wrap: wrap; }
-    .member bdi { overflow-wrap: anywhere; }
     #bar #share { background: #076747; color: white; border-color: #076747; }
     #activeBranch { max-width: 45%; font: inherit; font-size: .76rem; }
 
@@ -128,13 +127,6 @@
       overflow: auto;
     }
 
-    .member {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 6px;
-    }
-
     [hidden] { display: none !important; }
     :root{color-scheme:only light}
     #bar {background:white;border-bottom:1px solid #e8e5df}
@@ -142,7 +134,7 @@
     #bar button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
     #bar #share svg{color:#984534}#authorized svg{color:#356148}#logout svg{color:#76513e}#workspaceLanguage svg{color:#465e85}
     #bar #editName{border-color:transparent;text-align:start}
-    #bar[data-role="worker"] :is(#logout,#workspaceLanguage) span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+    #bar[data-role="member"] :is(#logout,#workspaceLanguage) span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
     #bar.scrolled{display:none}
     #adminPanel,#nameDialog,#storeNameDialog{width:min(490px,calc(100% - 24px));border-radius:16px;border:1px solid #e8e5df;background:#fff;color:#28261f;padding:20px}
     #adminPanel::backdrop,#nameDialog::backdrop,#storeNameDialog::backdrop{background:#29231975}
@@ -166,18 +158,97 @@
     #gate #create:hover:enabled{background:#edf7f1}
     #gate button:disabled{opacity:.6;cursor:wait}
     #gate :is(#message,#authFeedback):empty{display:none}
-    #adminPanel{width:min(510px,calc(100% - 24px));max-height:calc(100dvh - 24px);border-radius:19px;padding:clamp(16px,4vw,26px);box-shadow:0 18px 44px #2d211d26}
-    #adminPanel :is(h3,h4,p){margin:0}#adminPanel h3{font-size:1.25rem;margin-bottom:14px}
-    #adminPanel :is(input,select,button){border:1px solid #e8e5df;border-radius:9px;color:#28261f;background:#fff}
-    #adminPanel :is(input,select){width:100%;margin-top:5px;min-height:42px}
-    #adminPanel label{margin-top:0}#assign,#inviteOwner{margin-top:10px}
-    #adminPanel .access-primary{background:#984534;border-color:#984534;color:white;font-weight:650}
-    #adminPanel .access-footer{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:14px}
-    #adminPanel .access-footer button{margin:0}
-    #adminPanel .member{margin-top:7px;padding:7px 9px;border:1px solid #eee9e1;border-radius:9px;flex-wrap:wrap}
-    #adminPanel .member button{margin:0;font-size:.82rem}
-    #adminPanel .member button[data-revoke]{color:#943c30}
-    #adminPanel #adminMessage:not(:empty){margin-top:12px}#adminPanel #adminMessage:empty{display:none}
+    #adminPanel {
+      width: min(540px, calc(100% - 24px));
+      max-height: calc(100dvh - 24px);
+      border-color: #dae7e0;
+      border-radius: 20px;
+      padding: clamp(16px, 4vw, 26px);
+      color: #173b2d;
+      box-shadow: 0 18px 44px #2d211d26;
+    }
+    #adminPanel h2 {
+      margin: 0 0 16px;
+      font-size: 1.4rem;
+      line-height: 1.3;
+    }
+    #adminPanel :is(input, button) {
+      min-height: 44px;
+      margin: 0;
+      padding: 8px 12px;
+      border: 1px solid #cbded3;
+      border-radius: 9px;
+      background: #fff;
+      color: #173b2d;
+    }
+    #adminPanel :is(input, button):focus-visible {
+      outline: 2px solid #076747;
+      outline-offset: 2px;
+    }
+    #adminPanel button:hover:enabled { background: #f1f7f4; }
+    #adminPanel button:disabled { opacity: .6; cursor: wait; }
+    #inviteOwner { display: grid; gap: 12px; }
+    #inviteOwner label { display: grid; gap: 5px; margin: 0; font-weight: 600; }
+    #inviteOwner input { font-weight: 400; }
+    #adminPanel .access-primary {
+      border-color: #076747;
+      background: #076747;
+      color: #fff;
+      font-weight: 650;
+    }
+    #adminPanel .access-primary:hover:enabled { background: #05573d; }
+    #inviteHelp { margin: 0; color: #476358; font-size: .9rem; }
+    #invitations {
+      display: grid;
+      gap: 8px;
+      max-height: min(50dvh, 440px);
+      margin: 0;
+      padding: 3px;
+      overflow-y: auto;
+      list-style: none;
+    }
+    #invitations > li {
+      padding: 10px 12px;
+      border: 1px solid #e1ebe5;
+      border-radius: 12px;
+      background: #f6faf8;
+    }
+    .invitation-empty { color: #476358; text-align: center; }
+    .invitation-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+    }
+    .invitation-details { display: grid; justify-items: start; gap: 4px; min-width: 0; }
+    .invitation-details bdi { max-width: 100%; overflow-wrap: anywhere; font-weight: 650; }
+    .invitation-status {
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #fff0d2;
+      color: #6f4a00;
+      font-size: .8rem;
+      font-weight: 600;
+    }
+    .invitation-row[data-state="accepted"] .invitation-status { background: #dcefe4; color: #245d43; }
+    .invitation-row[data-state="revoked"] .invitation-status { background: #e9eeeb; color: #4b5d55; }
+    #adminPanel button[data-revoke] { border-color: #ead0cc; color: #8a3328; font-size: .875rem; }
+    #adminPanel button[data-revoke]:hover:enabled { background: #fff2f0; }
+    #adminPanel .access-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid #e1ebe5;
+    }
+    #adminMessage { margin: 12px 0 0; color: #3f584e; font-size: .9rem; }
+    #adminMessage:empty { display: none; }
+    @media (max-width: 360px) {
+      .invitation-row { grid-template-columns: 1fr; }
+      .invitation-row button { justify-self: end; }
+    }
   </style>
 
   <script defer src="./vendor/firebase-app-compat.js"></script>
@@ -255,24 +326,20 @@
       <button id="replace" data-ar="استخدام نسخة الجهاز">Use device copy</button>
     </div>
 
-    <dialog id="adminPanel">
-      <h3 id="grantTitle" data-ar="منح الوصول">Grant access</h3>
-      <h3 id="authorizedTitle" data-ar="المصرّح لهم" hidden>Authorized people</h3>
+    <dialog id="adminPanel" aria-labelledby="grantTitle">
+      <h2 id="grantTitle" data-ar="منح الوصول">Grant access</h2>
+      <h2 id="authorizedTitle" data-ar="المصرّح لهم" hidden>Authorized people</h2>
 
       <section id="adminOnly" hidden>
         <form id="inviteOwner">
-          <label><span data-ar="بريد الشخص الذي تريد السماح له بالدخول">Email to authorize</span>
-            <input id="ownerEmail" type="email" dir="ltr" required>
+          <label><span data-ar="البريد الإلكتروني للمدعو">Invitee’s email address</span>
+            <input id="ownerEmail" type="email" dir="ltr" aria-describedby="inviteHelp" autocomplete="off" maxlength="254" required>
           </label>
-          <button class="access-primary" data-ar="منح الوصول">Grant access</button>
+          <p id="inviteHelp" data-ar="بعد الموافقة، شارك رابط التطبيق مع المدعو ليدخل ببريده ويدير محله.">After approval, share the app link so the invitee can sign in and manage their store.</p>
+          <button class="access-primary" data-ar="تأكيد الدعوة">Approve invitation</button>
         </form>
-        <div id="existingAccess" hidden>
-          <h4 data-ar="صلاحيات الدخول الحالية">Current access grants</h4>
-          <div id="accessGrants"></div>
-        </div>
-        <div id="pendingApprovals" hidden>
-          <h4 data-ar="موافقات إنشاء الفروع">Store creation approvals</h4>
-          <div id="owners"></div>
+        <div id="invitationList" hidden>
+          <ul id="invitations" role="list"></ul>
         </div>
       </section>
 

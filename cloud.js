@@ -239,8 +239,8 @@ const profileRef = user => db.collection("profiles").doc(user.uid);
 const t = (en, ar) => document.documentElement.lang === "ar" ? ar : en;
 const cacheNotice = () => t("Connect to verify store access.", "اتصل بالإنترنت للتحقق من صلاحية الفرع.");
 let generation = 0, identity = 0, wanted = "";
-let listeners = [], stopWorker;
-let adminMode = false, profileName = "", nameLoading = false, invite, grant, worker, ready;
+let listeners = [];
+let adminMode = false, profileName = "", nameLoading = false, invite, legacyGrant, ready;
 const owned = new Map(), stores = new Map(), invitations = new Map();
 
 function closeLedger() {
@@ -264,29 +264,7 @@ function deny(reason) {
     : reason);
 }
 let accessPanelMode = "grant";
-let accessGrants = null, accessListFailed = false;
-
-function appendRevocation(container, email, label, prompt, action) {
-  const row = document.createElement("div");
-  const address = document.createElement("bdi");
-  const button = document.createElement("button");
-  row.className = "member";
-  address.textContent = email;
-  button.type = "button";
-  button.textContent = label;
-  button.setAttribute("data-revoke", "");
-  button.onclick = async () => {
-    if (button.disabled || !window.confirm(prompt)) return;
-    button.disabled = true;
-    try {
-      await adminAction(action);
-    } finally {
-      button.disabled = false;
-    }
-  };
-  row.append(address, button);
-  container.append(row);
-}
+let invitationsStatus = "loading";
 
 function renderPanel() {
   const showList = accessPanelMode === "list";
@@ -295,34 +273,70 @@ function renderPanel() {
   byId("adminPanel").setAttribute("aria-labelledby", showList ? "authorizedTitle" : "grantTitle");
   byId("copyAccessLink").hidden = showList;
   byId("inviteOwner").hidden = showList;
-  byId("pendingApprovals").hidden = !showList;
-  byId("existingAccess").hidden = !showList;
-  const grants = byId("accessGrants");
-  grants.replaceChildren();
-  if (accessListFailed) {
-    grants.textContent = t("Could not load current access grants.", "تعذّر تحميل صلاحيات الدخول الحالية.");
-  } else if (!accessGrants) {
-    grants.textContent = t("Loading access grants…", "جارٍ تحميل صلاحيات الدخول…");
-  } else {
-    for (const [email, storeId] of accessGrants) {
-      appendRevocation(grants, email, t("Revoke access", "إلغاء الوصول"),
-        t("Revoke access for ", "إلغاء الوصول لـ ") + email + "?",
-        () => revokeAccess(email, storeId));
+  byId("invitationList").hidden = !showList;
+  if (!showList) return;
+
+  const list = byId("invitations");
+  list.replaceChildren();
+  if (!invitations.size) {
+    const empty = document.createElement("li");
+    empty.className = "invitation-empty";
+    empty.textContent = invitationsStatus === "loading"
+      ? t("Loading invitations…", "جارٍ تحميل الدعوات…")
+      : invitationsStatus === "failed"
+        ? t("Could not load invitations.", "تعذّر تحميل الدعوات.")
+        : t("No invitations yet.", "لا توجد دعوات بعد.");
+    list.append(empty);
+    return;
+  }
+
+  const labels = {
+    pending: t("Pending", "بانتظار القبول"),
+    accepted: t("Accepted", "مقبولة"),
+    revoked: t("Revoked", "ملغاة")
+  };
+  const ordered = [...invitations].sort(([first], [second]) => first.localeCompare(second));
+  for (const [email, approval] of ordered) {
+    const state = approval.revoked === true ? "revoked" : approval.usedStoreId ? "accepted" : "pending";
+    const row = document.createElement("li");
+    row.className = "invitation-row";
+    row.dataset.state = state;
+    const details = document.createElement("div");
+    details.className = "invitation-details";
+    const address = document.createElement("bdi");
+    address.textContent = email;
+    const status = document.createElement("span");
+    status.className = "invitation-status";
+    status.textContent = labels[state];
+    details.append(address, status);
+    row.append(details);
+
+    if (state !== "revoked") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = t("Revoke", "إلغاء");
+      button.setAttribute("aria-label", t("Revoke invitation for ", "إلغاء دعوة ") + email);
+      button.setAttribute("data-revoke", "");
+      button.onclick = async () => {
+        if (button.disabled || !window.confirm(t("Revoke the invitation for ", "إلغاء الدعوة لـ ") + email + "?")) return;
+        button.disabled = true;
+        try {
+          const id = approval.usedStoreId || approval.pendingStoreId;
+          if (await adminAction(() => revokeInvitation(email, id))) {
+            byId("adminMessage").textContent = t("Invitation revoked.", "تم إلغاء الدعوة.");
+          }
+        } finally {
+          button.disabled = false;
+        }
+      };
+      row.append(button);
     }
-    if (!grants.childElementCount) grants.textContent = t("No active access grants.", "لا توجد صلاحيات دخول مفعّلة.");
+    list.append(row);
   }
-  const owners = byId("owners");
-  owners.replaceChildren();
-  for (const [email, approval] of invitations) {
-    if (!approval.pendingStoreId) continue;
-    appendRevocation(owners, email, t("Cancel approval", "إلغاء الموافقة"),
-      t("Cancel approval for ", "إلغاء الموافقة لـ ") + email + "?",
-      () => cancelApproval(email, approval.pendingStoreId));
-  }
-  if (!owners.childElementCount) owners.textContent = t("No pending approvals.", "لا توجد موافقات معلّقة.");
 }
 function canCreateInvitedStore() {
-  return !adminMode && owned.size === 0 && Boolean(invite?.pendingStoreId) && !invite.usedStoreId;
+  return !adminMode && owned.size === 0 && Boolean(invite?.pendingStoreId)
+    && !invite.usedStoreId && invite.revoked !== true;
 }
 function renderToolbar() {
   const selector = byId("activeBranch");
@@ -333,7 +347,7 @@ function renderToolbar() {
   selector.hidden = !adminMode || stores.size < 2;
   const canManageAccess = adminMode;
   byId("share").hidden = byId("authorized").hidden = !canManageAccess;
-  byId("bar").dataset.role = canManageAccess ? "owner" : "worker";
+  byId("bar").dataset.role = canManageAccess ? "owner" : "member";
   byId("useInvite").hidden = !canCreateInvitedStore();
   byId("profileName").textContent = profileName || t("Add name","إضافة اسم");
   byId("emailDisplay").textContent = auth.currentUser?.email || "";
@@ -359,8 +373,12 @@ async function refreshView() {
   const directEmail = emailOf(user);
   if (!user) return;
   stores.clear();
+  if (!adminMode && invite?.revoked === true) {
+    deny("permission-denied");
+    return;
+  }
   for (const [id, store] of owned) {
-    const allowed = store.ownerActive ?? (adminMode || (grant?.active && grant.storeId === id));
+    const allowed = store.ownerActive ?? (adminMode || (legacyGrant?.active && legacyGrant.storeId === id));
     if (allowed) stores.set(id, store);
   }
   if (!adminMode && stores.size > 1) {
@@ -370,9 +388,6 @@ async function refreshView() {
     const store = stores.get(primary);
     stores.clear();
     stores.set(primary, store);
-  }
-  if (!owned.size && worker && grant?.active && worker.id === grant.storeId && worker.store.ownerEmail !== directEmail) {
-    stores.set(worker.id, worker.store);
   }
   if (!adminMode && !stores.size && !canCreateInvitedStore()) {
     deny("permission-denied");
@@ -414,14 +429,11 @@ async function startAccess(user) {
   const token = ++identity;
   listeners.forEach(stop => stop());
   listeners = [];
-  stopWorker?.();
-  stopWorker = null;
   closeLedger();
   for (const id of ["adminPanel", "nameDialog", "storeNameDialog", "createDialog"]) byId(id).close();
   [owned, stores, invitations].forEach(map => map.clear());
-  accessGrants = null;
-  accessListFailed = false;
-  invite = grant = worker = null;
+  invitationsStatus = "loading";
+  invite = legacyGrant = null;
   ready = nameLoading = false;
   profileName = "";
   const email = emailOf(user);
@@ -445,50 +457,26 @@ async function startAccess(user) {
       }
       apply(snap);
       received.add(key);
-      ready = received.has("owned") && (adminMode || ["grant", "invite"].every(k => received.has(k)));
-      if (key === "grant" && grant?.active && !owned.has(grant.storeId) && !worker) return;
+      ready = received.has("owned") && (adminMode || ["legacyGrant", "invite"].every(k => received.has(k)));
       if (ready) void refreshView();
     }, error => { if (current()) onError(error); }));
   };
   try {
     const collection = db.collection("restaurants");
     if (adminMode) {
-      listen("accessGrants", db.collection("access").where("active", "==", true), snap => {
-        accessGrants = snap.docs
-          .filter(doc => doc.id !== ADMIN)
-          .map(doc => [doc.id, doc.data().storeId]);
-        accessListFailed = false;
-        renderPanel();
-      }, () => {
-        accessListFailed = true;
-        renderPanel();
-      });
       listen("invites", db.collection("ownerInvites"), snap => {
         invitations.clear();
         snap.forEach(doc => invitations.set(doc.id, doc.data()));
+        invitationsStatus = "ready";
+        renderPanel();
+      }, () => {
+        invitations.clear();
+        invitationsStatus = "failed";
         renderPanel();
       });
     } else {
       listen("invite", inviteRef(email), snap => { invite = snap.data(); });
-      listen("grant", accessRef(email), snap => {
-        grant = snap.data();
-        const id = grant?.active ? grant.storeId : "";
-        if (!id || worker?.id !== id) worker = null;
-        stopWorker?.();
-        stopWorker = null;
-        if (!id) return;
-        stopWorker = storeRef(id).onSnapshot({includeMetadataChanges: true}, store => {
-          if (!current() || !grant?.active || grant.storeId !== id || store.metadata.hasPendingWrites) return;
-          if (store.metadata.fromCache) return;
-          worker = store.exists ? {id, store: store.data()} : null;
-          void refreshView();
-        }, error => {
-          if (!current() || grant?.storeId !== id) return;
-          worker = null;
-          if (error.code === "permission-denied") void refreshView();
-          else fail(error);
-        });
-      });
+      listen("legacyGrant", accessRef(email), snap => { legacyGrant = snap.data(); });
     }
     listen("owned", collection.where("ownerEmail", "==", email), snap => {
       owned.clear();
@@ -514,12 +502,6 @@ async function adminAction(action, form, feedbackId = "adminMessage") {
     if (button) button.disabled = false;
   }
 }
-function onSubmit(id, action, feedbackId) {
-  byId(id).onsubmit = event => {
-    event.preventDefault();
-    void adminAction(action, event.currentTarget, feedbackId);
-  };
-}
 function readEmail(id) {
   const email = byId(id).value.trim().toLowerCase();
   if (!email || email.includes("/")) throw Error(t("Enter a valid email.", "أدخل بريدًا صحيحًا."));
@@ -530,25 +512,17 @@ function readName(id) {
   if (!name) throw Error(t("Enter a name.", "أدخل اسمًا."));
   return name;
 }
-async function revokeAccess(email, storeId) {
+async function revokeInvitation(email, expectedStoreId) {
   if (!adminMode || email === ADMIN) return;
   await db.runTransaction(async tx => {
-    const ref = accessRef(email);
-    const grant = (await tx.get(ref)).data();
-    if (!grant?.active) return;
-    if (grant.storeId !== storeId) {
-      throw Error(t("This access grant changed. Review the list and try again.",
-        "تغيّرت صلاحية هذا البريد. راجع القائمة وحاول مجددًا."));
-    }
-    tx.update(ref, {active: false});
-  });
-}
-async function cancelApproval(email, id) {
-  if (!adminMode) return;
-  await db.runTransaction(async tx => {
     const ref = inviteRef(email);
-    const snap = await tx.get(ref);
-    if (snap.data()?.pendingStoreId === id && !snap.data()?.usedStoreId) tx.delete(ref);
+    const current = (await tx.get(ref)).data();
+    if (!current || current.revoked === true) return;
+    if (!expectedStoreId || (current.usedStoreId || current.pendingStoreId) !== expectedStoreId) {
+      throw Error(t("This invitation changed. Review the list and try again.",
+        "تغيّرت هذه الدعوة. راجع القائمة وحاول مجددًا."));
+    }
+    tx.update(ref, {revoked: true});
   });
 }
 byId("checkAccess").onclick = async () => {
@@ -593,23 +567,30 @@ document.addEventListener("tracker-language", () => {
   if (byId("status").dataset.saved === "true") statusText("تمت المزامنة");
 });
 
-onSubmit("inviteOwner", async () => {
+byId("inviteOwner").onsubmit = async event => {
+  event.preventDefault();
   if (!adminMode) return;
-  const email = readEmail("ownerEmail");
-  if (email === ADMIN) throw Error(t("Enter the invitee’s email.", "أدخل بريد الشخص المدعو."));
-  const ref = inviteRef(email);
-  const id = db.collection("restaurants").doc().id;
-  await db.runTransaction(async tx => {
-    const current = await tx.get(ref);
-    if (current.data()?.pendingStoreId) {
-      throw Error(t("This email already has one unused approval.", "لهذا البريد موافقة واحدة لم تُستخدم بعد."));
-    }
-    if (current.exists) {
-      throw Error(t("This email already used its store approval.", "هذا البريد سبق أن استخدم موافقته لإنشاء محل."));
-    }
-    tx.set(ref, {pendingStoreId: id});
-  });
-});
+  const saved = await adminAction(async () => {
+    const email = readEmail("ownerEmail");
+    if (email === ADMIN) throw Error(t("Enter the invitee’s email.", "أدخل بريد الشخص المدعو."));
+    const ref = inviteRef(email);
+    const id = db.collection("restaurants").doc().id;
+    await db.runTransaction(async tx => {
+      const current = (await tx.get(ref)).data();
+      if (!current) {
+        tx.set(ref, {pendingStoreId: id});
+      } else if (current.revoked === true) {
+        tx.update(ref, {revoked: false});
+      } else {
+        throw Error(t("This email already has an active invitation.", "لهذا البريد دعوة مفعّلة بالفعل."));
+      }
+    });
+  }, event.currentTarget);
+  if (saved) {
+    byId("adminMessage").textContent = t("Invitation saved. Copy the app link to share it.",
+      "تم حفظ الدعوة. انسخ رابط التطبيق لمشاركته مع المدعو.");
+  }
+};
 byId("useInvite").onclick = () => {
   if (!canCreateInvitedStore()) return;
   byId("createFeedback").textContent = "";
@@ -629,7 +610,8 @@ byId("createInvitedStore").onsubmit = async event => {
     const ref = inviteRef(email);
     await db.runTransaction(async tx => {
       const current = await tx.get(ref);
-      if (!expected || current.data()?.pendingStoreId !== expected || current.data()?.usedStoreId) {
+      const approval = current.data();
+      if (!expected || approval?.revoked === true || approval?.pendingStoreId !== expected || approval?.usedStoreId) {
         throw Error(t("This approval is no longer available.", "هذه الموافقة لم تعد متاحة."));
       }
       tx.set(storeRef(expected), {name, ownerEmail: email, ownerActive: true});

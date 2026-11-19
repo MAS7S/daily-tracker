@@ -1,4 +1,4 @@
-const VERSION = "2026-11-19.revoke-access.1";
+const VERSION = "2026-11-19.email-invitations.1";
 const SCOPE = self.registration.scope;
 const PREFIX = "daily-tracker/" + SCOPE + "/";
 const CACHE = PREFIX + VERSION;

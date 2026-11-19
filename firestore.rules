@@ -1,7 +1,10 @@
 rules_version = '2';
 
-// access/{lowercaseEmail}: storeId identifies the assigned store and active is a boolean.
-// Older grants may contain additional metadata, which is preserved on revocation.
+// ownerInvites/{lowercaseEmail}: pendingStoreId identifies the invitation's store.
+// Accepting it clears pendingStoreId and records the same ID in usedStoreId.
+// The optional revoked boolean controls access without changing either store ID.
+// access/{lowercaseEmail}: legacy storeId and active fields support existing store owners.
+// restaurants/{id}: ownerEmail identifies the owner and ownerActive controls store availability.
 service cloud.firestore {
   match /databases/{database}/documents {
     function verified() {
@@ -20,16 +23,21 @@ service cloud.firestore {
       let path = /databases/$(database)/documents/access/$(email());
       return exists(path) && get(path).data.active == true && get(path).data.storeId == id;
     }
+    function invitationAllowsAccess() {
+      let path = invitePath(email());
+      return admin() || !exists(path) || get(path).data.get('revoked', false) == false;
+    }
     function ownerEnabled(id, store) {
       // Older stores use their owner's existing access grant until an admin sets ownerActive.
-      return store.get('ownerActive', null) == true
-        || (store.get('ownerActive', null) == null && (admin() || assigned(id)));
+      return invitationAllowsAccess()
+        && (store.get('ownerActive', null) == true
+          || (store.get('ownerActive', null) == null && (admin() || assigned(id))));
     }
     function accessStore(id) {
       return verified() && canUseStore(id, get(storePath(id)).data);
     }
     function canUseStore(id, store) {
-      return store.ownerEmail == email() ? ownerEnabled(id, store) : (!admin() && assigned(id));
+      return store.ownerEmail == email() && ownerEnabled(id, store);
     }
     function validStore(store) {
       return store.keys().hasOnly(['name', 'ownerEmail', 'ownerActive'])
@@ -40,17 +48,28 @@ service cloud.firestore {
     function consumesApproval(id, store) {
       let approval = invitePath(email());
       return store.ownerEmail == email() && store.ownerActive == true
+        && get(approval).data.get('revoked', false) == false
         && get(approval).data.pendingStoreId == id
         && getAfter(approval).data.pendingStoreId == ''
         && getAfter(approval).data.usedStoreId == id;
+    }
+    function validStoreId(id) {
+      return id is string && id.size() > 0 && id.size() <= 1500 && id.matches('[^/]+');
+    }
+    function validInvitation(invitation) {
+      return invitation.keys().hasOnly(['pendingStoreId', 'usedStoreId', 'revoked'])
+        && invitation.get('revoked', false) is bool
+        && ((validStoreId(invitation.pendingStoreId) && !('usedStoreId' in invitation))
+          || (invitation.pendingStoreId == '' && validStoreId(invitation.get('usedStoreId', ''))));
     }
     function createsApprovedStore(address) {
       let id = resource.data.pendingStoreId;
       let path = storePath(id);
       return verified() && email() == address
-        && id is string && id.size() > 0
+        && validStoreId(id)
+        && resource.data.get('revoked', false) == false
         && !('usedStoreId' in resource.data)
-        && request.resource.data.keys().hasOnly(['pendingStoreId', 'usedStoreId'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingStoreId', 'usedStoreId'])
         && request.resource.data.pendingStoreId == ''
         && request.resource.data.usedStoreId == id
         && !exists(path) && getAfter(path).data.ownerEmail == address;
@@ -59,15 +78,16 @@ service cloud.firestore {
       allow get: if admin() || (verified() && email() == address);
       allow list: if admin();
       allow create: if admin()
-        && request.resource.data.keys().hasOnly(['pendingStoreId'])
-        && request.resource.data.pendingStoreId is string
+        && validInvitation(request.resource.data)
         && request.resource.data.pendingStoreId.size() == 20
-        && address == address.lower() && address != 'malekshahbien@gmail.com';
-      allow update: if createsApprovedStore(address);
-      allow delete: if admin()
-        && !('usedStoreId' in resource.data)
-        && resource.data.pendingStoreId is string
-        && resource.data.pendingStoreId.size() > 0;
+        && request.resource.data.get('revoked', false) == false
+        && address.size() <= 254 && address.matches('[^@/]+@[^@/]+')
+        && address == address.lower() && address != email();
+      allow update: if validInvitation(request.resource.data)
+        && ((admin() && address != email()
+            && request.resource.data.revoked is bool
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revoked']))
+          || createsApprovedStore(address));
     }
     match /profiles/{uid} {
       allow get: if verified() && request.auth.uid == uid;
@@ -76,17 +96,8 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60;
     }
-    function validAccessGrant(grant) {
-      return grant.active is bool && grant.storeId is string
-        && grant.storeId.size() > 0 && grant.storeId.size() <= 1500;
-    }
     match /access/{address} {
-      allow get: if admin() || (verified() && email() == address);
-      allow list: if admin();
-      allow update: if admin() && email() != address
-        && validAccessGrant(request.resource.data)
-        && resource.data.active == true && request.resource.data.active == false
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active']);
+      allow get: if verified() && email() == address;
     }
     match /restaurants/{id} {
       allow get: if accessStore(id);
