@@ -146,6 +146,18 @@
     #adminPanel,#nameDialog{width:min(490px,calc(100% - 24px));border-radius:16px;border:1px solid #e8e5df;background:#fff;color:#28261f;padding:20px}
     #adminPanel::backdrop,#nameDialog::backdrop{background:#29231975}
     @media(max-width:600px){#bar button,#bar #share{padding:6px 8px;min-height:38px}.access-buttons{gap:4px}}
+    body:has(#gate:not([hidden])){background:#f7f3ed;color:#28261f}
+    #gate{width:min(calc(100% - 28px),500px);margin:clamp(20px,10vh,110px) auto;padding:clamp(18px,5vw,34px);border:1px solid #e8e0d5;border-radius:20px;background:#fffdf9;box-shadow:0 12px 34px #39291512}
+    .login-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;color:#984534}
+    #gate h1{font-size:clamp(1.8rem,5vw,2.35rem);margin:12px 0 16px}
+    #gate button,#gate input{border-color:#e8e0d5;color:#28261f}
+    #gate #language{float:none;margin:0;padding:6px 10px}
+    #gate #google{min-height:44px;font-weight:650}
+    #gate input{min-height:43px;background:#fff}
+    #gate button:focus-visible,#gate input:focus-visible{outline:2px solid #984534;outline-offset:2px}
+    #gate #login{background:#984534;border-color:#984534;color:white;font-weight:700;margin-top:15px}
+    #gate :is(#create,#forgot){width:auto;margin-inline-end:5px;font-size:.86rem}
+    #gate :is(#message,#authFeedback):empty{display:none}
   </style>
 
   <script defer src="./vendor/firebase-app-compat.js"></script>
@@ -157,15 +169,8 @@
 
 <body>
   <main id="gate">
-    <button id="language" type="button">العربية</button>
-
-    <img src="./icons/icon-192.png" width="52" height="52" alt="">
-
-    <h1 data-ar="متتبع الدخل والمصروفات اليومية">Daily Income &amp; Expense Tracker</h1>
-
-    <p data-ar="سجّل الدخول لفتح دفترك ومزامنته بين أجهزتك.">
-      Sign in to open your ledger and sync across devices.
-    </p>
+    <div class="login-heading"><strong>Daily Tracker</strong><button id="language" type="button">العربية</button></div>
+    <h1 data-ar="تسجيل الدخول">Sign in</h1>
 
     <button id="google" type="button">
       <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
