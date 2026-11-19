@@ -44,6 +44,8 @@ function openLedger(s) {
   window.trackerBridge = {
     read: () => s.record.value,
     storeName: () => stores.get(s.branchId)?.name || "",
+    canEditStoreName: () => s === session && s.branchId === wanted && owned.has(s.branchId),
+    editStoreName: () => { if (s === session && s.branchId === wanted) openStoreNameDialog(); },
     save(value) {
       if (s !== session) throw Error("Account changed");
       const copy = JSON.parse(JSON.stringify(value));
@@ -183,7 +185,6 @@ async function enter(user, branchId, ticket) {
     gate.hidden = true; workspace.hidden = false;
     byId("emailDisplay").textContent = user.email;
     statusText("جارٍ فتح دفتر الفرع…");
-    byId("branchLabel").textContent = selectedName || branchId;
     const unsubscribe = s.ref.onSnapshot({includeMetadataChanges:true}, snap => {
       if (s !== session) return;
       if (!snap.metadata.fromCache && !snap.metadata.hasPendingWrites) schedule(s);
@@ -237,7 +238,7 @@ const inviteRef = email => db.collection("ownerInvites").doc(email);
 const profileRef = user => db.collection("profiles").doc(user.uid);
 const t = (en, ar) => document.documentElement.lang === "ar" ? ar : en;
 const cacheNotice = () => t("Connect to verify store access.", "اتصل بالإنترنت للتحقق من صلاحية الفرع.");
-let generation = 0, identity = 0, wanted = "", selectedName = "";
+let generation = 0, identity = 0, wanted = "";
 let listeners = [], stopWorker;
 let adminMode = false, profileName = "", nameLoading = false, invite, grant, worker, ready;
 const owned = new Map(), stores = new Map(), invitations = new Map();
@@ -301,13 +302,11 @@ function canCreateInvitedStore() {
 }
 function renderToolbar() {
   const selector = byId("activeBranch");
-  selector.replaceChildren(...[...stores].map(([id, store]) => new Option(store.name, id)));
-  selector.value = wanted;
+  const switchStore = new Option(t("Switch store", "تبديل المحل"), "");
+  switchStore.disabled = true;
+  selector.replaceChildren(switchStore, ...[...stores].map(([id, store]) => new Option(store.name, id)));
+  selector.value = "";
   selector.hidden = !adminMode || stores.size < 2;
-  const current = stores.get(wanted);
-  byId("branchLabel").textContent = current?.name || "";
-  byId("editStoreName").hidden = !current;
-  byId("editStoreName").disabled = !current || !owned.has(wanted);
   const canManageAccess = adminMode;
   byId("share").hidden = byId("authorized").hidden = !canManageAccess;
   byId("bar").dataset.role = canManageAccess ? "owner" : "worker";
@@ -317,10 +316,7 @@ function renderToolbar() {
   if (byId("adminPanel").open && !adminMode) byId("adminPanel").close();
 }
 function selectStore(id) {
-  const store = stores.get(id);
-  if (!store) return;
-  selectedName = store.name;
-  byId("branchLabel").textContent = store.name;
+  if (!stores.has(id)) return;
   if (wanted !== id) {
     closeLedger();
     wanted = id;
@@ -386,7 +382,6 @@ async function refreshView() {
     closeLedger();
     workspace.hidden = false;
     gate.hidden = true;
-    byId("branchLabel").textContent = "";
     statusText(adminMode ? "" : t("You have approval to create one store.", "لديك موافقة لإنشاء فرع واحد."));
     renderToolbar();
   }
@@ -543,6 +538,8 @@ byId("copyAccessLink").onclick = async () => {
 byId("closePanel").onclick = () => byId("adminPanel").close();
 byId("activeBranch").onchange = event => selectStore(event.target.value);
 document.addEventListener("tracker-language", () => {
+  const storePrompt = byId("activeBranch").options[0];
+  if (storePrompt) storePrompt.textContent = t("Switch store", "تبديل المحل");
   renderPanel();
   if (byId("status").dataset.saved === "true") statusText("تمت المزامنة");
 });
@@ -594,13 +591,13 @@ byId("createInvitedStore").onsubmit = async event => {
   }, event.currentTarget, "createFeedback");
   if (ok) byId("createDialog").close();
 };
-byId("editStoreName").onclick = () => {
+function openStoreNameDialog() {
   const current = stores.get(wanted);
   if (!current || !owned.has(wanted)) return;
   byId("newStoreName").value = current.name;
   byId("storeNameFeedback").textContent = "";
   byId("storeNameDialog").showModal();
-};
+}
 byId("cancelStoreName").onclick = () => byId("storeNameDialog").close();
 byId("storeNameForm").onsubmit = async event => {
   event.preventDefault();
