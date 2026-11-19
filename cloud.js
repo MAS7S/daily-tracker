@@ -57,10 +57,17 @@ function openLedger(s) {
     const bar = byId("bar");
     const frameWindow = frame.contentWindow;
     bar.classList.remove("scrolled");
-    let previousScroll = 0;
+    let previousScroll = frameWindow.scrollY;
+    let previousHeight = frameWindow.innerHeight;
     frameWindow.addEventListener("scroll", () => {
       if (session !== s) return;
       const current = Math.max(0, frameWindow.scrollY);
+      if (frameWindow.innerHeight !== previousHeight) {
+        previousHeight = frameWindow.innerHeight;
+        previousScroll = current;
+        if (current < 16) bar.classList.remove("scrolled");
+        return;
+      }
       const delta = current - previousScroll;
       if (current < 16 || delta < -8) {
         bar.classList.remove("scrolled");
@@ -285,8 +292,17 @@ function renderPanel() {
     const button = document.createElement("button");
     row.className = "member";
     label.textContent = email;
-    button.textContent = account.active ? t("Disable", "تعطيل") : t("Enable", "تفعيل");
-    button.onclick = () => adminAction(() => accessRef(email).update({active: !account.active}));
+    button.textContent = account.active ? t("Remove access", "إزالة الوصول") : t("Restore access", "استعادة الوصول");
+    button.toggleAttribute("data-revoke", account.active);
+    button.onclick = async () => {
+      if (button.disabled || (account.active && !window.confirm(t("Remove access for ", "إزالة الوصول لـ ") + email + "?"))) return;
+      button.disabled = true;
+      try {
+        await adminAction(() => accessRef(email).update({active: !account.active}));
+      } finally {
+        button.disabled = false;
+      }
+    };
     row.append(label, button);
     members.append(row);
   }
@@ -301,7 +317,16 @@ function renderPanel() {
     row.className = "member";
     label.textContent = email;
     button.textContent = t("Cancel approval", "إلغاء الموافقة");
-    button.onclick = () => adminAction(() => cancelApproval(email, approval.pendingStoreId));
+    button.setAttribute("data-revoke","");
+    button.onclick = async () => {
+      if (button.disabled || !window.confirm(t("Cancel approval for ", "إلغاء الموافقة لـ ") + email + "?")) return;
+      button.disabled = true;
+      try {
+        await adminAction(() => cancelApproval(email, approval.pendingStoreId));
+      } finally {
+        button.disabled = false;
+      }
+    };
     row.append(label, button);
     owners.append(row);
   }

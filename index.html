@@ -143,7 +143,7 @@
     #bar #share svg{color:#984534}#authorized svg{color:#356148}#logout svg{color:#76513e}#workspaceLanguage svg{color:#465e85}
     #bar #editName{border-color:transparent;text-align:start}
     #bar[data-role="worker"] :is(#logout,#workspaceLanguage) span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
-    #bar.scrolled:not(:focus-within){display:none}
+    #bar.scrolled{display:none}
     #adminPanel,#nameDialog{width:min(490px,calc(100% - 24px));border-radius:16px;border:1px solid #e8e5df;background:#fff;color:#28261f;padding:20px}
     #adminPanel::backdrop,#nameDialog::backdrop{background:#29231975}
     @media(max-width:600px){#bar button,#bar #share{padding:6px 8px;min-height:38px}.access-buttons{gap:4px}}
@@ -159,6 +159,20 @@
     #gate #login{background:#984534;border-color:#984534;color:white;font-weight:700;margin-top:15px}
     #gate :is(#create,#forgot){width:auto;margin-inline-end:5px;font-size:.86rem}
     #gate :is(#message,#authFeedback):empty{display:none}
+    #adminPanel{width:min(510px,calc(100% - 24px));max-height:calc(100dvh - 24px);border-radius:19px;padding:clamp(16px,4vw,26px);box-shadow:0 18px 44px #2d211d26}
+    #adminPanel :is(h3,h4,p){margin:0}#adminPanel h3{font-size:1.25rem;margin-bottom:14px}
+    #adminPanel #ownStore:not([hidden]) + #adminOnly:not([hidden]){border-top:1px solid #e8e5df;margin-top:14px;padding-top:14px}
+    #adminPanel :is(input,select,button){border:1px solid #e8e5df;border-radius:9px;color:#28261f;background:#fff}
+    #adminPanel :is(input,select){width:100%;margin-top:5px;min-height:42px}
+    #adminPanel label{margin-top:0}#assign,#inviteOwner{margin-top:10px}
+    #adminPanel .access-primary{background:#984534;border-color:#984534;color:white;font-weight:650}
+    #adminPanel .access-footer{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:14px}
+    #adminPanel .access-footer button{margin:0}
+    #adminPanel #teamList h4{margin-top:12px}
+    #adminPanel .member{margin-top:7px;padding:7px 9px;border:1px solid #eee9e1;border-radius:9px;flex-wrap:wrap}
+    #adminPanel .member button{margin:0;font-size:.82rem}
+    #adminPanel .member button[data-revoke]{color:#943c30}
+    #adminPanel #adminMessage:not(:empty){margin-top:12px}#adminPanel #adminMessage:empty{display:none}
   </style>
 
   <script defer src="./vendor/firebase-app-compat.js"></script>
@@ -238,7 +252,6 @@
     <dialog id="adminPanel">
       <h3 id="grantTitle" data-ar="منح الوصول">Grant access</h3>
       <h3 id="authorizedTitle" data-ar="المصرّح لهم" hidden>Authorized people</h3>
-      <button id="closePanel" data-ar="تم">Done</button>
 
       <section id="ownStore" hidden>
         <label id="shareBranchPicker" hidden>
@@ -255,7 +268,7 @@
             <span data-ar="بريد العامل">Worker email</span>
             <input type="email" required id="memberEmail" dir="ltr">
           </label>
-          <button data-ar="حفظ وتفعيل">Save and enable</button>
+          <button class="access-primary" data-ar="منح الوصول">Grant access</button>
         </form>
       </section>
       <section id="adminOnly" hidden>
@@ -263,7 +276,7 @@
           <label><span data-ar="بريد الشخص الذي توافق له على إنشاء فرع خاص به">Email of the person you want to approve</span>
             <input id="ownerEmail" type="email" dir="ltr" required>
           </label>
-          <button data-ar="السماح بإنشاء فرع واحد">Approve one store</button>
+          <button class="access-primary" data-ar="السماح بإنشاء فرع">Approve store creation</button>
         </form>
         <div id="pendingApprovals" hidden>
           <h4 data-ar="موافقات إنشاء الفروع">Store creation approvals</h4>
@@ -271,8 +284,11 @@
         </div>
       </section>
 
-      <button type="button" id="copyAccessLink" data-ar="نسخ رابط التطبيق">Copy app link</button>
       <p role="status" id="adminMessage"></p>
+      <div class="access-footer">
+        <button type="button" id="copyAccessLink" data-ar="نسخ رابط التطبيق">Copy app link</button>
+        <button type="button" id="closePanel" data-ar="إغلاق">Close</button>
+      </div>
     </dialog>
 
     <iframe id="ledger" title="Daily Tracker"></iframe>

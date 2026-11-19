@@ -1,4 +1,4 @@
-const VERSION = "2026-11-19.toolbar-scroll.1";
+const VERSION = "2026-11-19.access-dialogs.1";
 const SCOPE = self.registration.scope;
 const PREFIX = "daily-tracker/" + SCOPE + "/";
 const CACHE = PREFIX + VERSION;
