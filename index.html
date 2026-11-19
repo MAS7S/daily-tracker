@@ -161,14 +161,12 @@
     #gate :is(#message,#authFeedback):empty{display:none}
     #adminPanel{width:min(510px,calc(100% - 24px));max-height:calc(100dvh - 24px);border-radius:19px;padding:clamp(16px,4vw,26px);box-shadow:0 18px 44px #2d211d26}
     #adminPanel :is(h3,h4,p){margin:0}#adminPanel h3{font-size:1.25rem;margin-bottom:14px}
-    #adminPanel #ownStore:not([hidden]) + #adminOnly:not([hidden]){border-top:1px solid #e8e5df;margin-top:14px;padding-top:14px}
     #adminPanel :is(input,select,button){border:1px solid #e8e5df;border-radius:9px;color:#28261f;background:#fff}
     #adminPanel :is(input,select){width:100%;margin-top:5px;min-height:42px}
     #adminPanel label{margin-top:0}#assign,#inviteOwner{margin-top:10px}
     #adminPanel .access-primary{background:#984534;border-color:#984534;color:white;font-weight:650}
     #adminPanel .access-footer{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:14px}
     #adminPanel .access-footer button{margin:0}
-    #adminPanel #teamList h4{margin-top:12px}
     #adminPanel .member{margin-top:7px;padding:7px 9px;border:1px solid #eee9e1;border-radius:9px;flex-wrap:wrap}
     #adminPanel .member button{margin:0;font-size:.82rem}
     #adminPanel .member button[data-revoke]{color:#943c30}
@@ -253,30 +251,12 @@
       <h3 id="grantTitle" data-ar="منح الوصول">Grant access</h3>
       <h3 id="authorizedTitle" data-ar="المصرّح لهم" hidden>Authorized people</h3>
 
-      <section id="ownStore" hidden>
-        <label id="shareBranchPicker" hidden>
-          <span data-ar="الفرع الحالي">Current store</span>
-          <select id="branch"></select>
-        </label>
-        <div id="teamList" hidden>
-          <p><span data-ar="مالك الفرع">Store owner</span> <bdi id="branchOwner"></bdi></p>
-          <h4 data-ar="فريق الفرع">Store team</h4>
-          <section id="members"></section>
-        </div>
-        <form id="assign">
-          <label>
-            <span data-ar="بريد العامل">Worker email</span>
-            <input type="email" required id="memberEmail" dir="ltr">
-          </label>
-          <button class="access-primary" data-ar="منح الوصول">Grant access</button>
-        </form>
-      </section>
       <section id="adminOnly" hidden>
         <form id="inviteOwner">
-          <label><span data-ar="بريد الشخص الذي توافق له على إنشاء فرع خاص به">Email of the person you want to approve</span>
+          <label><span data-ar="بريد الشخص الذي تريد السماح له بالدخول">Email to authorize</span>
             <input id="ownerEmail" type="email" dir="ltr" required>
           </label>
-          <button class="access-primary" data-ar="السماح بإنشاء فرع">Approve store creation</button>
+          <button class="access-primary" data-ar="منح الوصول">Grant access</button>
         </form>
         <div id="pendingApprovals" hidden>
           <h4 data-ar="موافقات إنشاء الفروع">Store creation approvals</h4>

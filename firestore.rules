@@ -22,25 +22,11 @@ service cloud.firestore {
       return store.get('ownerActive', null) == true
         || (store.get('ownerActive', null) == null && (admin() || assigned(id)));
     }
-    function owns(id) {
-      let store = get(storePath(id)).data;
-      return store.ownerEmail == email() && ownerEnabled(id, store);
-    }
     function accessStore(id) {
       return verified() && canUseStore(id, get(storePath(id)).data);
     }
     function canUseStore(id, store) {
       return store.ownerEmail == email() ? ownerEnabled(id, store) : (!admin() && assigned(id));
-    }
-    function validGrant(address) {
-      let grant = request.resource.data;
-      return address == address.lower()
-        && grant.keys().hasOnly(['active', 'storeId'])
-        && grant.active is bool && grant.storeId is string;
-    }
-    function ownerCanAssign(address) {
-      let id = request.resource.data.storeId;
-      return verified() && address != 'malekshahbien@gmail.com' && address != email() && owns(id);
     }
     function validStore(store) {
       return store.keys().hasOnly(['name', 'ownerEmail', 'ownerActive'])
@@ -77,15 +63,9 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60;
     }
+    // Existing legacy grants are read-only to app clients.
     match /access/{address} {
-      allow get: if verified() && (email() == address || owns(resource.data.storeId));
-      allow list: if verified() && owns(resource.data.storeId);
-      allow create: if validGrant(address)
-        && ownerCanAssign(address)
-        && existsAfter(storePath(request.resource.data.storeId));
-      allow update: if validGrant(address)
-        && request.resource.data.storeId == resource.data.storeId && ownerCanAssign(address)
-        && existsAfter(storePath(request.resource.data.storeId));
+      allow get: if verified() && email() == address;
     }
     match /restaurants/{id} {
       allow get: if accessStore(id);

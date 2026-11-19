@@ -237,9 +237,9 @@ const profileRef = user => db.collection("profiles").doc(user.uid);
 const t = (en, ar) => document.documentElement.lang === "ar" ? ar : en;
 const cacheNotice = () => t("Connect to verify store access.", "اتصل بالإنترنت للتحقق من صلاحية الفرع.");
 let generation = 0, identity = 0, wanted = "", selectedName = "";
-let listeners = [], stopWorker, stopMembers;
+let listeners = [], stopWorker;
 let adminMode = false, profileName = "", nameLoading = false, invite, grant, worker, ready;
-const owned = new Map(), stores = new Map(), accounts = new Map(), invitations = new Map();
+const owned = new Map(), stores = new Map(), invitations = new Map();
 
 function closeLedger() {
   ++generation;
@@ -261,9 +261,6 @@ function deny(reason) {
     ? t("Store access is disabled or you have no invitation.", "لا توجد دعوة لهذا الحساب أو أن صلاحية الفرع معطّلة.")
     : reason);
 }
-function manages(id) {
-  return stores.has(id) && owned.has(id);
-}
 let accessPanelMode = "grant";
 function renderPanel() {
   const showList = accessPanelMode === "list";
@@ -271,42 +268,8 @@ function renderPanel() {
   byId("authorizedTitle").hidden = !showList;
   byId("adminPanel").setAttribute("aria-labelledby", showList ? "authorizedTitle" : "grantTitle");
   byId("copyAccessLink").hidden = showList;
-  byId("assign").hidden = showList;
-  byId("teamList").hidden = !showList;
   byId("inviteOwner").hidden = showList;
   byId("pendingApprovals").hidden = !showList;
-  const current = stores.get(wanted);
-  byId("ownStore").hidden = !manages(wanted);
-  const branch = byId("branch");
-  branch.replaceChildren(...[...stores].filter(([id]) => manages(id))
-    .map(([id, store]) => new Option(store.name, id)));
-  branch.value = wanted;
-  byId("shareBranchPicker").hidden = branch.options.length < 2;
-  byId("branchOwner").textContent = current?.ownerEmail || "";
-  const members = byId("members");
-  members.replaceChildren();
-  for (const [email, account] of accounts) {
-    if (account.storeId !== wanted || email === current?.ownerEmail) continue;
-    const row = document.createElement("div");
-    const label = document.createElement("bdi");
-    const button = document.createElement("button");
-    row.className = "member";
-    label.textContent = email;
-    button.textContent = account.active ? t("Remove access", "إزالة الوصول") : t("Restore access", "استعادة الوصول");
-    button.toggleAttribute("data-revoke", account.active);
-    button.onclick = async () => {
-      if (button.disabled || (account.active && !window.confirm(t("Remove access for ", "إزالة الوصول لـ ") + email + "?"))) return;
-      button.disabled = true;
-      try {
-        await adminAction(() => accessRef(email).update({active: !account.active}));
-      } finally {
-        button.disabled = false;
-      }
-    };
-    row.append(label, button);
-    members.append(row);
-  }
-  if (!members.childElementCount) members.textContent = t("No workers yet.", "لا يوجد عمّال بعد.");
   const owners = byId("owners");
   owners.replaceChildren();
   for (const [email, approval] of invitations) {
@@ -337,29 +300,13 @@ function renderToolbar() {
   selector.replaceChildren(...[...stores].map(([id, store]) => new Option(store.name, id)));
   selector.value = wanted;
   selector.hidden = stores.size < 2;
-  const canManageAccess = adminMode || manages(wanted);
+  const canManageAccess = adminMode;
   byId("share").hidden = byId("authorized").hidden = !canManageAccess;
   byId("bar").dataset.role = canManageAccess ? "owner" : "worker";
   byId("useInvite").hidden = adminMode || !invite?.pendingStoreId;
   byId("profileName").textContent = profileName || t("Add name","إضافة اسم");
   byId("emailDisplay").textContent = auth.currentUser?.email || "";
-  if (byId("adminPanel").open && !adminMode && !manages(wanted)) byId("adminPanel").close();
-}
-function listenMembers() {
-  stopMembers?.();
-  stopMembers = null;
-  accounts.clear();
-  renderPanel();
-  if (!manages(wanted)) return;
-  const id = wanted;
-  stopMembers = db.collection("access").where("storeId", "==", id).onSnapshot(snap => {
-    if (wanted !== id) return;
-    accounts.clear();
-    snap.forEach(doc => accounts.set(doc.id, doc.data()));
-    renderPanel();
-  }, error => {
-    if (wanted === id) byId("adminMessage").textContent = error.code || error.message;
-  });
+  if (byId("adminPanel").open && !adminMode) byId("adminPanel").close();
 }
 function selectStore(id) {
   const store = stores.get(id);
@@ -374,7 +321,6 @@ function selectStore(id) {
     enter(auth.currentUser, id, ticket).catch(error => {
       if (ticket === generation) deny(error.code || error.message);
     });
-    listenMembers();
   }
   renderToolbar();
 }
@@ -433,11 +379,10 @@ async function startAccess(user) {
   listeners.forEach(stop => stop());
   listeners = [];
   stopWorker?.();
-  stopMembers?.();
-  stopWorker = stopMembers = null;
+  stopWorker = null;
   closeLedger();
   for (const id of ["adminPanel", "nameDialog", "createDialog"]) byId(id).close();
-  [owned, stores, accounts, invitations].forEach(map => map.clear());
+  [owned, stores, invitations].forEach(map => map.clear());
   invite = grant = worker = null;
   ready = nameLoading = false;
   profileName = "";
@@ -538,6 +483,7 @@ function readName(id) {
   return name;
 }
 async function cancelApproval(email, id) {
+  if (!adminMode) return;
   await db.runTransaction(async tx => {
     const ref = inviteRef(email);
     const snap = await tx.get(ref);
@@ -560,7 +506,7 @@ byId("verify").onclick = async () => {
 };
 byId("leave").onclick = () => auth.signOut().catch(error => message(error.code));
 function openAccessPanel(mode) {
-  if (!adminMode && !manages(wanted)) return;
+  if (!adminMode) return;
   accessPanelMode = mode;
   byId("adminMessage").textContent = "";
   renderPanel();
@@ -578,30 +524,14 @@ byId("copyAccessLink").onclick = async () => {
   }
 };
 byId("closePanel").onclick = () => byId("adminPanel").close();
-byId("activeBranch").onchange = byId("branch").onchange = event => selectStore(event.target.value);
+byId("activeBranch").onchange = event => selectStore(event.target.value);
 document.addEventListener("tracker-language", () => {
   renderPanel();
   if (byId("status").dataset.saved === "true") statusText("تمت المزامنة");
 });
 
-onSubmit("assign", async () => {
-  const email = readEmail("memberEmail");
-  const id = wanted;
-  const store = stores.get(id);
-  if (email === ADMIN || email === store?.ownerEmail) {
-    throw Error(t("This email already manages the store.", "هذا البريد يدير الفرع بالفعل."));
-  }
-  const ref = accessRef(email);
-  const grant = {storeId: id, active: true};
-  try {
-    await ref.set(grant);
-  } catch (error) {
-    if (error.code !== "permission-denied") throw error;
-    throw Error(t("This worker may already belong to another store.",
-      "تعذّرت إضافة العامل. قد يكون مسندًا إلى فرع آخر."));
-  }
-});
 onSubmit("inviteOwner", async () => {
+  if (!adminMode) return;
   const email = readEmail("ownerEmail");
   if (email === ADMIN) throw Error(t("Enter the invitee’s email.", "أدخل بريد الشخص المدعو."));
   const ref = inviteRef(email);
