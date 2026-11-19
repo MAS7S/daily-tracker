@@ -11,6 +11,7 @@ const message = value => { byId("message").textContent = value; };
 const config = window.firebaseConfig;
 const prefix = "daily-tracker:" + location.pathname.replace(/index\.html$/, "") + ":" + config.projectId + ":";
 let session, auth, db;
+let accessRevoked = false;
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js", {updateViaCache:"none"}).then(registration => {
@@ -259,9 +260,35 @@ function closeLedger() {
 function deny(reason) {
   closeLedger();
   for (const id of ["adminPanel", "nameDialog", "storeNameDialog", "createDialog"]) byId(id).close();
-  message(reason === "permission-denied"
-    ? t("Access requires an active approval from the owner.", "دخول التطبيق يتطلب موافقة مفعّلة من المالك.")
-    : reason);
+  const user = auth?.currentUser;
+  if (reason !== "permission-denied" || !user || emailOf(user) === ADMIN) {
+    message(reason);
+    return;
+  }
+  accessRevoked = true;
+  ++identity;
+  listeners.forEach(stop => stop());
+  listeners = [];
+  stores.clear();
+  invite = null;
+  profileName = "";
+  try {
+    const ledgerPrefix = prefix + user.uid + ":store:";
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(ledgerPrefix)) localStorage.removeItem(key);
+    }
+    sessionStorage.removeItem(prefix + emailOf(user) + ":store");
+  } catch (error) {
+    console.warn("Could not clear the signed-out account cache.", error.name);
+  }
+  showRevokedMessage();
+  void auth.signOut().catch(error => {
+    console.warn("Could not sign out after access was denied.", error.code);
+  });
+}
+function showRevokedMessage() {
+  message(t("Access revoked. Contact the owner for approval.", "تم إلغاء الوصول. تواصل مع المالك للحصول على موافقة."));
 }
 let accessPanelMode = "grant";
 let invitationsStatus = "loading", legacyAccessStatus = "loading";
@@ -328,25 +355,23 @@ function renderPanel() {
     details.append(address, status, account);
     row.append(details);
 
-    if (state !== "revoked") {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = t("Revoke access", "إلغاء الوصول");
-      button.setAttribute("aria-label", t("Revoke access for ", "إلغاء الوصول لـ ") + email);
-      button.setAttribute("data-revoke", "");
-      button.onclick = async () => {
-        if (button.disabled || !window.confirm(t("Revoke access for ", "إلغاء الوصول لـ ") + email + "?")) return;
-        button.disabled = true;
-        try {
-          if (await adminAction(() => revokeEmailAccess(email, approval))) {
-            byId("adminMessage").textContent = t("Access revoked.", "تم إلغاء الوصول.");
-          }
-        } finally {
-          button.disabled = false;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = t("Revoke access", "إلغاء الوصول");
+    button.setAttribute("aria-label", t("Revoke access for ", "إلغاء الوصول لـ ") + email);
+    button.setAttribute("data-revoke", "");
+    button.onclick = async () => {
+      if (button.disabled || !window.confirm(t("Revoke access for ", "إلغاء الوصول لـ ") + email + "?")) return;
+      button.disabled = true;
+      try {
+        if (await adminAction(() => revokeEmailAccess(email))) {
+          byId("adminMessage").textContent = t("Access revoked.", "تم إلغاء الوصول.");
         }
-      };
-      row.append(button);
-    }
+      } finally {
+        button.disabled = false;
+      }
+    };
+    row.append(button);
     list.append(row);
   }
 }
@@ -470,7 +495,12 @@ async function startAccess(user) {
   byId("accountActions").hidden = !user;
   byId("verify").hidden = !user || user.emailVerified;
   byId("authForm").hidden = byId("google").hidden = byId("forgot").hidden = !!user;
-  if (!user) { message(""); return; }
+  if (!user) {
+    if (accessRevoked) showRevokedMessage();
+    else message("");
+    return;
+  }
+  accessRevoked = false;
   if (!user.emailVerified) { message("أكّد بريدك ثم اضغط تحقق من الوصول."); return; }
   message("جارٍ التحقق من صلاحية الدخول…");
   const current = () => identity === token && auth.currentUser?.uid === user.uid;
@@ -595,22 +625,19 @@ function readName(id) {
   if (!name) throw Error(t("Enter a name.", "أدخل اسمًا."));
   return name;
 }
-async function revokeEmailAccess(email, displayed) {
+async function revokeEmailAccess(address) {
+  const email = address.trim().toLowerCase();
   if (!adminMode || email === ADMIN) return;
-  await db.runTransaction(async tx => {
-    let ref = inviteRef(email);
-    let current = (await tx.get(ref)).data();
-    if (displayed.legacy) {
-      ref = accessRef(email);
-      current = current ? null : (await tx.get(ref)).data();
-    }
-    const storeId = data => data?.usedStoreId || data?.pendingStoreId || data?.storeId;
-    if (!current || storeId(current) !== storeId(displayed)) {
-      throw Error(t("This access record changed. Review the list and try again.",
-        "تغيّر سجل هذا البريد. راجع القائمة وحاول مجددًا."));
-    }
-    if (!current.revoked) tx.update(ref, {revoked: true});
-  });
+  const addresses = new Set([email, address]);
+  for (const id of [...invitations.keys(), ...legacyAccess.keys()]) {
+    if (id.trim().toLowerCase() === email) addresses.add(id);
+  }
+  const batch = db.batch();
+  for (const id of addresses) {
+    batch.delete(inviteRef(id));
+    batch.delete(accessRef(id));
+  }
+  await batch.commit();
 }
 byId("checkAccess").onclick = async () => {
   try {

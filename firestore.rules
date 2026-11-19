@@ -99,6 +99,7 @@ service cloud.firestore {
     match /ownerInvites/{address} {
       allow get: if admin() || (verified() && email() == address);
       allow list: if admin();
+      allow delete: if admin() && address.lower() != email();
       allow create: if admin()
         && validInvitation(request.resource.data)
         && request.resource.data.pendingStoreId.size() == 20
@@ -121,10 +122,7 @@ service cloud.firestore {
     match /access/{address} {
       allow get: if admin();
       allow list: if admin();
-      allow update: if admin() && address != email()
-        && resource.data.get('revoked', false) != true
-        && request.resource.data.revoked == true
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revoked']);
+      allow delete: if admin() && address.lower() != email();
     }
     match /restaurants/{id} {
       allow get: if hasAppAccess() && ownsEnabledStore(resource.data);
