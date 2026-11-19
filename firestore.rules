@@ -38,23 +38,33 @@ service cloud.firestore {
       let approval = invitePath(email());
       return store.ownerEmail == email() && store.ownerActive == true
         && get(approval).data.pendingStoreId == id
-        && getAfter(approval).data.pendingStoreId == '';
+        && getAfter(approval).data.pendingStoreId == ''
+        && getAfter(approval).data.usedStoreId == id;
     }
     function createsApprovedStore(address) {
       let id = resource.data.pendingStoreId;
       let path = storePath(id);
       return verified() && email() == address
         && id is string && id.size() > 0
+        && !('usedStoreId' in resource.data)
+        && request.resource.data.keys().hasOnly(['pendingStoreId', 'usedStoreId'])
         && request.resource.data.pendingStoreId == ''
+        && request.resource.data.usedStoreId == id
         && !exists(path) && getAfter(path).data.ownerEmail == address;
     }
     match /ownerInvites/{address} {
       allow get: if admin() || (verified() && email() == address);
       allow list: if admin();
-      allow create, update: if request.resource.data.keys().hasOnly(['pendingStoreId'])
-        && request.resource.data.pendingStoreId is string && request.resource.data.pendingStoreId.size() <= 20
-        && address == address.lower() && address != 'malekshahbien@gmail.com'
-        && (admin() || createsApprovedStore(address));
+      allow create: if admin()
+        && request.resource.data.keys().hasOnly(['pendingStoreId'])
+        && request.resource.data.pendingStoreId is string
+        && request.resource.data.pendingStoreId.size() == 20
+        && address == address.lower() && address != 'malekshahbien@gmail.com';
+      allow update: if createsApprovedStore(address);
+      allow delete: if admin()
+        && !('usedStoreId' in resource.data)
+        && resource.data.pendingStoreId is string
+        && resource.data.pendingStoreId.size() > 0;
     }
     match /profiles/{uid} {
       allow get: if verified() && request.auth.uid == uid;

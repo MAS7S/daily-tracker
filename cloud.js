@@ -295,6 +295,9 @@ function renderPanel() {
   }
   if (!owners.childElementCount) owners.textContent = t("No pending approvals.", "لا توجد موافقات معلّقة.");
 }
+function canCreateInvitedStore() {
+  return !adminMode && owned.size === 0 && Boolean(invite?.pendingStoreId) && !invite.usedStoreId;
+}
 function renderToolbar() {
   const selector = byId("activeBranch");
   selector.replaceChildren(...[...stores].map(([id, store]) => new Option(store.name, id)));
@@ -303,7 +306,7 @@ function renderToolbar() {
   const canManageAccess = adminMode;
   byId("share").hidden = byId("authorized").hidden = !canManageAccess;
   byId("bar").dataset.role = canManageAccess ? "owner" : "worker";
-  byId("useInvite").hidden = adminMode || !invite?.pendingStoreId;
+  byId("useInvite").hidden = !canCreateInvitedStore();
   byId("profileName").textContent = profileName || t("Add name","إضافة اسم");
   byId("emailDisplay").textContent = auth.currentUser?.email || "";
   if (byId("adminPanel").open && !adminMode) byId("adminPanel").close();
@@ -338,7 +341,7 @@ async function refreshView() {
   if (worker && grant?.active && worker.id === grant.storeId && worker.store.ownerEmail !== directEmail) {
     stores.set(worker.id, worker.store);
   }
-  if (!adminMode && !stores.size && !invite?.pendingStoreId) {
+  if (!adminMode && !stores.size && !canCreateInvitedStore()) {
     deny("permission-denied");
     return;
   }
@@ -347,7 +350,7 @@ async function refreshView() {
     nameLoading = true;
     try {
       const snap = await profileRef(user).get({source: "server"});
-      if (token !== identity || (!adminMode && !stores.size && !invite?.pendingStoreId)) return;
+      if (token !== identity || (!adminMode && !stores.size && !canCreateInvitedStore())) return;
       profileName = snap.data()?.name || "";
       if (!profileName) {
         byId("userName").value = user.displayName || "";
@@ -487,7 +490,7 @@ async function cancelApproval(email, id) {
   await db.runTransaction(async tx => {
     const ref = inviteRef(email);
     const snap = await tx.get(ref);
-    if (snap.data()?.pendingStoreId === id) tx.update(ref, {pendingStoreId: ""});
+    if (snap.data()?.pendingStoreId === id && !snap.data()?.usedStoreId) tx.delete(ref);
   });
 }
 byId("checkAccess").onclick = async () => {
@@ -541,10 +544,14 @@ onSubmit("inviteOwner", async () => {
     if (current.data()?.pendingStoreId) {
       throw Error(t("This email already has one unused approval.", "لهذا البريد موافقة واحدة لم تُستخدم بعد."));
     }
+    if (current.exists) {
+      throw Error(t("This email already used its store approval.", "هذا البريد سبق أن استخدم موافقته لإنشاء محل."));
+    }
     tx.set(ref, {pendingStoreId: id});
   });
 });
 byId("useInvite").onclick = () => {
+  if (!canCreateInvitedStore()) return;
   byId("createFeedback").textContent = "";
   byId("createDialog").showModal();
 };
@@ -555,15 +562,18 @@ byId("createInvitedStore").onsubmit = async event => {
     const name = readName("invitedStoreName");
     const user = auth.currentUser;
     const email = emailOf(user);
-    const expected = invite?.pendingStoreId;
+    if (!canCreateInvitedStore()) {
+      throw Error(t("You can only create one store.", "يمكنك إنشاء محل واحد فقط."));
+    }
+    const expected = invite.pendingStoreId;
     const ref = inviteRef(email);
     await db.runTransaction(async tx => {
       const current = await tx.get(ref);
-      if (!expected || current.data()?.pendingStoreId !== expected) {
+      if (!expected || current.data()?.pendingStoreId !== expected || current.data()?.usedStoreId) {
         throw Error(t("This approval is no longer available.", "هذه الموافقة لم تعد متاحة."));
       }
       tx.set(storeRef(expected), {name, ownerEmail: email, ownerActive: true});
-      tx.update(ref, {pendingStoreId: ""});
+      tx.update(ref, {pendingStoreId: "", usedStoreId: expected});
     });
     sessionStorage.setItem(prefix + email + ":store", expected);
     if (stores.has(expected)) selectStore(expected);
