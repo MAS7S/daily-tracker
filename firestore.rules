@@ -82,6 +82,11 @@ service cloud.firestore {
       allow list: if verified() && resource.data.ownerEmail == email();
       allow create: if validStore(request.resource.data)
         && verified() && !admin() && consumesApproval(id, request.resource.data);
+      allow update: if verified()
+        && resource.data.ownerEmail == email()
+        && ownerEnabled(id, resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        && validStore(request.resource.data);
       match /ledgers/main {
         allow read: if accessStore(id);
         allow create, update: if accessStore(id)

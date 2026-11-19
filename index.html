@@ -141,11 +141,12 @@
     #bar button,#bar #share{background:#fff;color:#28261f;border:1px solid #e8e5df;border-radius:10px;display:inline-flex;align-items:center;gap:6px;padding:8px 11px}
     #bar button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
     #bar #share svg{color:#984534}#authorized svg{color:#356148}#logout svg{color:#76513e}#workspaceLanguage svg{color:#465e85}
+    #bar #editStoreName{border-color:transparent;text-align:start;min-width:0;overflow-wrap:anywhere}
     #bar #editName{border-color:transparent;text-align:start}
     #bar[data-role="worker"] :is(#logout,#workspaceLanguage) span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
     #bar.scrolled{display:none}
-    #adminPanel,#nameDialog{width:min(490px,calc(100% - 24px));border-radius:16px;border:1px solid #e8e5df;background:#fff;color:#28261f;padding:20px}
-    #adminPanel::backdrop,#nameDialog::backdrop{background:#29231975}
+    #adminPanel,#nameDialog,#storeNameDialog{width:min(490px,calc(100% - 24px));border-radius:16px;border:1px solid #e8e5df;background:#fff;color:#28261f;padding:20px}
+    #adminPanel::backdrop,#nameDialog::backdrop,#storeNameDialog::backdrop{background:#29231975}
     @media(max-width:600px){#bar button,#bar #share{padding:6px 8px;min-height:38px}.access-buttons{gap:4px}}
     body:has(#gate:not([hidden])){background:#f7f3ed;color:#28261f}
     #gate{width:min(calc(100% - 28px),500px);margin:clamp(20px,10vh,110px) auto;padding:clamp(18px,5vw,34px);border:1px solid #e8e0d5;border-radius:20px;background:#fffdf9;box-shadow:0 12px 34px #39291512}
@@ -234,7 +235,7 @@
       <div class="bar-row">
         <button id="editName" type="button"><bdi id="profileName"></bdi></button>
         <span id="emailDisplay" hidden></span>
-        <span id="branchLabel" hidden></span>
+        <button type="button" id="editStoreName" hidden><bdi id="branchLabel"></bdi></button>
         <select id="activeBranch" aria-label="Store / الفرع" hidden></select>
         <button id="useInvite" data-ar="إنشاء فرعي" hidden>Create my store</button>
       </div>
@@ -274,6 +275,16 @@
     <iframe id="ledger" title="Daily Tracker"></iframe>
   </section>
 
+  <dialog id="storeNameDialog" aria-labelledby="storeNameTitle">
+    <form id="storeNameForm">
+      <h3 id="storeNameTitle" data-ar="اسم المحل">Store name</h3>
+      <label for="newStoreName" data-ar="اسم المحل الجديد">New store name</label>
+      <input id="newStoreName" maxlength="100" required>
+      <button type="submit" data-ar="حفظ اسم المحل">Save store name</button>
+      <button type="button" id="cancelStoreName" data-ar="إلغاء">Cancel</button>
+      <p id="storeNameFeedback" role="status"></p>
+    </form>
+  </dialog>
   <dialog id="nameDialog">
     <form id="nameForm">
       <h3 data-ar="اسمك في التطبيق">Your name</h3>

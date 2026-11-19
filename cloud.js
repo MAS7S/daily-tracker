@@ -43,6 +43,7 @@ function openLedger(s) {
   if (s !== session) return;
   window.trackerBridge = {
     read: () => s.record.value,
+    storeName: () => stores.get(s.branchId)?.name || "",
     save(value) {
       if (s !== session) throw Error("Account changed");
       const copy = JSON.parse(JSON.stringify(value));
@@ -256,7 +257,7 @@ function closeLedger() {
 }
 function deny(reason) {
   closeLedger();
-  for (const id of ["adminPanel", "nameDialog", "createDialog"]) byId(id).close();
+  for (const id of ["adminPanel", "nameDialog", "storeNameDialog", "createDialog"]) byId(id).close();
   message(reason === "permission-denied"
     ? t("Store access is disabled or you have no invitation.", "لا توجد دعوة لهذا الحساب أو أن صلاحية الفرع معطّلة.")
     : reason);
@@ -302,7 +303,11 @@ function renderToolbar() {
   const selector = byId("activeBranch");
   selector.replaceChildren(...[...stores].map(([id, store]) => new Option(store.name, id)));
   selector.value = wanted;
-  selector.hidden = stores.size < 2;
+  selector.hidden = !adminMode || stores.size < 2;
+  const current = stores.get(wanted);
+  byId("branchLabel").textContent = current?.name || "";
+  byId("editStoreName").hidden = !current;
+  byId("editStoreName").disabled = !current || !owned.has(wanted);
   const canManageAccess = adminMode;
   byId("share").hidden = byId("authorized").hidden = !canManageAccess;
   byId("bar").dataset.role = canManageAccess ? "owner" : "worker";
@@ -338,7 +343,15 @@ async function refreshView() {
     const allowed = store.ownerActive ?? (adminMode || (grant?.active && grant.storeId === id));
     if (allowed) stores.set(id, store);
   }
-  if (worker && grant?.active && worker.id === grant.storeId && worker.store.ownerEmail !== directEmail) {
+  if (!adminMode && stores.size > 1) {
+    const last = sessionStorage.getItem(prefix + directEmail + ":store");
+    const approved = invite?.usedStoreId;
+    const primary = [approved, wanted, last].find(id => stores.has(id)) || stores.keys().next().value;
+    const store = stores.get(primary);
+    stores.clear();
+    stores.set(primary, store);
+  }
+  if (!owned.size && worker && grant?.active && worker.id === grant.storeId && worker.store.ownerEmail !== directEmail) {
     stores.set(worker.id, worker.store);
   }
   if (!adminMode && !stores.size && !canCreateInvitedStore()) {
@@ -368,6 +381,7 @@ async function refreshView() {
   if (stores.size) {
     const last = sessionStorage.getItem(prefix + directEmail + ":store");
     selectStore(stores.has(wanted) ? wanted : stores.has(last) ? last : stores.keys().next().value);
+    frame.contentWindow?.refreshStoreTitle?.();
   } else {
     closeLedger();
     workspace.hidden = false;
@@ -384,7 +398,7 @@ async function startAccess(user) {
   stopWorker?.();
   stopWorker = null;
   closeLedger();
-  for (const id of ["adminPanel", "nameDialog", "createDialog"]) byId(id).close();
+  for (const id of ["adminPanel", "nameDialog", "storeNameDialog", "createDialog"]) byId(id).close();
   [owned, stores, invitations].forEach(map => map.clear());
   invite = grant = worker = null;
   ready = nameLoading = false;
@@ -579,6 +593,25 @@ byId("createInvitedStore").onsubmit = async event => {
     if (stores.has(expected)) selectStore(expected);
   }, event.currentTarget, "createFeedback");
   if (ok) byId("createDialog").close();
+};
+byId("editStoreName").onclick = () => {
+  const current = stores.get(wanted);
+  if (!current || !owned.has(wanted)) return;
+  byId("newStoreName").value = current.name;
+  byId("storeNameFeedback").textContent = "";
+  byId("storeNameDialog").showModal();
+};
+byId("cancelStoreName").onclick = () => byId("storeNameDialog").close();
+byId("storeNameForm").onsubmit = async event => {
+  event.preventDefault();
+  const id = wanted;
+  const token = identity;
+  if (!owned.has(id) || !stores.has(id)) return;
+  const saved = await adminAction(async () => {
+    const name = readName("newStoreName");
+    await storeRef(id).update({name});
+  }, event.currentTarget, "storeNameFeedback");
+  if (saved && token === identity) byId("storeNameDialog").close();
 };
 byId("nameDialog").addEventListener("cancel", event => { if (!profileName) event.preventDefault(); });
 byId("editName").onclick = () => {

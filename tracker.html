@@ -9,6 +9,7 @@
 <style>
 :root{--bg:#f3f4f6;--card:#fff;--ink:#111827;--mute:#6b7280;--line:#e5e7eb;--accent:#2563eb;--credit:#2563eb;--cash:#16a34a;--danger:#dc2626;--warn:#d97706;--net:#111827;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 *{box-sizing:border-box}
+#storeNamePanel[hidden]{display:none}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:10px;max-width:820px;margin-inline:auto}
 #mmsg{white-space:pre-line}#rb{background:#ea580c}h1{font-size:22px;margin:4px 0 4px}.hd{display:flex;align-items:center;justify-content:space-between;gap:8px}#lg{padding:7px 14px;font-size:14px;flex:0 0 auto}
 html[dir=rtl] th{text-align:right}html[dir=rtl] th.r,html[dir=rtl] td.t{text-align:left}html[dir=rtl] td.d{padding-left:2px;padding-right:6px}html[dir=rtl] .xb,html[dir=rtl] .sr b,html[dir=rtl] .box b{unicode-bidi:plaintext}
@@ -149,7 +150,7 @@ body{padding-top:0}
 <div class="bn" id="bn"></div>
 <div class="hd"><h1 id="h1">Daily Income &amp; Expense Tracker</h1><button class="b gray" id="lg" type="button">عربي</button></div>
 <div class="range" id="range"></div>
-<div class="panel">
+<div class="panel" id="storeNamePanel">
   <div><label for="store">Store name</label><input id="store" placeholder="Store name" autocomplete="off"></div>
 </div>
 <div class="summary-cards"><div class="sb sbx"><div class="sr n"><div class="summary-label"><small>Net profit</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h16M7 14V9m5 5V6m5 8V3"/></svg></div><b id="gn">$0.00</b>
@@ -214,6 +215,11 @@ function md(i){return dt(i).toLocaleDateString(LC(),{month:"short",day:"numeric"
 function num(v){var x=parseFloat(v);return isNaN(x)?0:x}
 function ex(r){return r.x.reduce(function(t,e){return t+num(e.a)},0)}
 function exk(r){return r.x.reduce(function(t,e){return t+(e.t==="credit"?num(e.a):0)},0)}
+function refreshStoreTitle(){
+  const name = typeof bridge.storeName === "function" ? bridge.storeName() : store;
+  $("h1").textContent = name ? name + " – Daily Tracker" : "Daily Income & Expense Tracker";
+}
+if (typeof bridge.storeName === "function") $("storeNamePanel").hidden = true;
 function totals(){
   var c=0,k=0,e=0,ek=0;
   data.forEach(function(r,i){
@@ -222,7 +228,7 @@ function totals(){
     var eb=$("e"+i);if(eb)eb.textContent=money(x);
   });
   $("tc").textContent=money(c-ek);$("tc").className=(c-ek<0?"neg":"");$("kl").textContent=money(k-(e-ek));$("kl").className=(k-(e-ek)<0?"neg":"");$("ec2").textContent=money(e-ek);$("ek2").textContent=money(ek);$("gi").textContent=money(c+k);$("ic").textContent=money(k);$("icr").textContent=money(c);$("ge").textContent=money(e);$("gn").textContent=money(c+k-e);
-  chk();$("h1").textContent=store?store+" – Daily Tracker":"Daily Income & Expense Tracker";
+  chk();refreshStoreTitle();
   $("range").textContent=md(data[0].d)+" – "+md(data[data.length-1].d)+", "+dt(data[data.length-1].d).getFullYear()+" · "+data.length+" day"+(data.length>1?"s":"");
 }
 function render(){
