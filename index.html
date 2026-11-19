@@ -101,14 +101,15 @@
     }
     .bar-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
     #bar p { margin: 0; font-size: .78rem; overflow-wrap: anywhere; }
-    #status { flex: 1; }
+    #status { flex: 1 0 max-content; max-width: 100%; overflow-wrap: normal; }
+    @media(max-width:600px){#bar #status{flex-basis:100%}}
     #status[data-saved="true"]::before {
       content: ""; display: inline-block; width: 7px; height: 7px;
       border-radius: 50%; background: #15954c; margin-inline-end: 5px;
     }
     #profileName { min-width: 0; overflow-wrap: anywhere; font-weight: 600; font-size: .85rem; }
     #bar button { font-size: .76rem; padding: 3px 8px; min-height: 32px; }
-    .access-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+    .access-buttons { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; max-width: 100%; }
     .access-buttons:has(> button[hidden]:first-child) { display: none; }
     #bar .bar-row:first-child { flex-wrap: wrap; }
     .member bdi { overflow-wrap: anywhere; }
@@ -142,7 +143,7 @@
     #bar #share svg{color:#984534}#authorized svg{color:#356148}#logout svg{color:#76513e}#workspaceLanguage svg{color:#465e85}
     #bar #editName{border-color:transparent;text-align:start}
     #bar[data-role="worker"] :is(#logout,#workspaceLanguage) span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
-    #bar[data-role="worker"].scrolled:not(:focus-within){display:none}
+    #bar.scrolled:not(:focus-within){display:none}
     #adminPanel,#nameDialog{width:min(490px,calc(100% - 24px));border-radius:16px;border:1px solid #e8e5df;background:#fff;color:#28261f;padding:20px}
     #adminPanel::backdrop,#nameDialog::backdrop{background:#29231975}
     @media(max-width:600px){#bar button,#bar #share{padding:6px 8px;min-height:38px}.access-buttons{gap:4px}}

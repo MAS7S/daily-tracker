@@ -57,8 +57,19 @@ function openLedger(s) {
     const bar = byId("bar");
     const frameWindow = frame.contentWindow;
     bar.classList.remove("scrolled");
+    let previousScroll = 0;
     frameWindow.addEventListener("scroll", () => {
-      if (session === s) bar.classList.toggle("scrolled",frameWindow.scrollY > 24);
+      if (session !== s) return;
+      const current = Math.max(0, frameWindow.scrollY);
+      const delta = current - previousScroll;
+      if (current < 16 || delta < -8) {
+        bar.classList.remove("scrolled");
+      } else if (current > 48 && delta > 8) {
+        bar.classList.add("scrolled");
+      }
+      if (current < 16 || Math.abs(delta) > 8) {
+        previousScroll = current;
+      }
     }, {passive:true});
     if (session === s && !s.record.value && frame.contentWindow.snapshot)
       window.trackerBridge.save(frame.contentWindow.snapshot());
