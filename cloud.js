@@ -240,7 +240,7 @@ const t = (en, ar) => document.documentElement.lang === "ar" ? ar : en;
 const cacheNotice = () => t("Connect to verify store access.", "اتصل بالإنترنت للتحقق من صلاحية الفرع.");
 let generation = 0, identity = 0, wanted = "";
 let listeners = [];
-let adminMode = false, profileName = "", nameLoading = false, invite, legacyGrant, ready;
+let adminMode = false, profileName = "", nameLoading = false, invite, ready;
 const owned = new Map(), stores = new Map(), invitations = new Map(), legacyAccess = new Map();
 
 function closeLedger() {
@@ -260,7 +260,7 @@ function deny(reason) {
   closeLedger();
   for (const id of ["adminPanel", "nameDialog", "storeNameDialog", "createDialog"]) byId(id).close();
   message(reason === "permission-denied"
-    ? t("Store access is disabled or you have no invitation.", "لا توجد دعوة لهذا الحساب أو أن صلاحية الفرع معطّلة.")
+    ? t("Access requires an active approval from the owner.", "دخول التطبيق يتطلب موافقة مفعّلة من المالك.")
     : reason);
 }
 let accessPanelMode = "grant";
@@ -299,13 +299,17 @@ function renderPanel() {
   const labels = {
     pending: t("Pending", "بانتظار القبول"),
     accepted: t("Accepted", "مقبولة"),
+    needsApproval: t("Needs approval", "تحتاج موافقة"),
     legacy: t("Previous access", "صلاحية سابقة"),
     revoked: t("Revoked", "ملغاة")
   };
   const ordered = [...entries].sort(([first], [second]) => first.localeCompare(second));
   for (const [email, approval] of ordered) {
-    const state = approval.revoked === true ? "revoked"
-      : approval.legacy ? "legacy" : approval.usedStoreId ? "accepted" : "pending";
+    let state = "pending";
+    if (approval.revoked === true) state = "revoked";
+    else if (approval.legacy) state = "legacy";
+    else if (!activeApproval(approval)) state = "needsApproval";
+    else if (approval.usedStoreId) state = "accepted";
     const row = document.createElement("li");
     row.className = "invitation-row";
     row.dataset.state = state;
@@ -346,9 +350,15 @@ function renderPanel() {
     list.append(row);
   }
 }
+function activeApproval(approval) {
+  return approval?.approved === true && (approval.revoked === undefined || approval.revoked === false);
+}
+function hasBoundApproval(user) {
+  return Boolean(user && activeApproval(invite) && invite.accountUid === user.uid);
+}
 function canCreateInvitedStore() {
-  return !adminMode && owned.size === 0 && Boolean(invite?.pendingStoreId)
-    && !invite.usedStoreId && invite.revoked !== true;
+  return !adminMode && hasBoundApproval(auth.currentUser) && owned.size === 0
+    && Boolean(invite.pendingStoreId) && !invite.usedStoreId;
 }
 function renderToolbar() {
   const selector = byId("activeBranch");
@@ -385,13 +395,12 @@ async function refreshView() {
   const directEmail = emailOf(user);
   if (!user) return;
   stores.clear();
-  if (!adminMode && (invite || legacyGrant)?.revoked === true) {
+  if (!adminMode && !hasBoundApproval(user)) {
     deny("permission-denied");
     return;
   }
   for (const [id, store] of owned) {
-    const allowed = store.ownerActive ?? (adminMode || (legacyGrant?.active && legacyGrant.storeId === id));
-    if (allowed) stores.set(id, store);
+    if (store.ownerActive == null || store.ownerActive === true) stores.set(id, store);
   }
   if (!adminMode && stores.size > 1) {
     const last = sessionStorage.getItem(prefix + directEmail + ":store");
@@ -410,7 +419,9 @@ async function refreshView() {
     nameLoading = true;
     try {
       const snap = await profileRef(user).get({source: "server"});
-      if (token !== identity || (!adminMode && !stores.size && !canCreateInvitedStore())) return;
+      if (token !== identity) return;
+      if (!adminMode && !hasBoundApproval(user)) return;
+      if (!adminMode && !stores.size && !canCreateInvitedStore()) return;
       profileName = snap.data()?.name || "";
       if (!profileName) {
         byId("userName").value = user.displayName || "";
@@ -445,7 +456,7 @@ async function startAccess(user) {
   for (const id of ["adminPanel", "nameDialog", "storeNameDialog", "createDialog"]) byId(id).close();
   [owned, stores, invitations, legacyAccess].forEach(map => map.clear());
   invitationsStatus = legacyAccessStatus = "loading";
-  invite = legacyGrant = null;
+  invite = null;
   ready = nameLoading = false;
   profileName = "";
   const email = emailOf(user);
@@ -458,25 +469,46 @@ async function startAccess(user) {
   if (!user.emailVerified) { message("أكّد بريدك ثم اضغط تحقق من الوصول."); return; }
   message("جارٍ التحقق من صلاحية الدخول…");
   const current = () => identity === token && auth.currentUser?.uid === user.uid;
-  const received = new Set();
   const fail = error => { if (current()) deny(error.code || error.message); };
-  const listen = (key, ref, apply, onError = fail) => {
-    listeners.push(ref.onSnapshot({includeMetadataChanges: true}, snap => {
+  const listen = (ref, apply, onError = fail) => {
+    let received = false;
+    return ref.onSnapshot({includeMetadataChanges: true}, snap => {
       if (!current() || snap.metadata.hasPendingWrites) return;
       if (snap.metadata.fromCache) {
-        if (received.has(key)) deny(cacheNotice());
+        if (received) deny(cacheNotice());
         return;
       }
+      received = true;
       apply(snap);
-      received.add(key);
-      ready = received.has("owned") && (adminMode || ["legacyGrant", "invite"].every(k => received.has(k)));
-      if (ready) void refreshView();
-    }, error => { if (current()) onError(error); }));
+    }, error => { if (current()) onError(error); });
+  };
+  let stopOwned = null;
+  let claiming = false;
+  const closeOwnedWatch = () => {
+    stopOwned?.();
+    stopOwned = null;
+    ready = false;
+    owned.clear();
+  };
+  listeners.push(closeOwnedWatch);
+
+  const watchOwned = () => {
+    if (stopOwned) return;
+    const query = db.collection("restaurants").where("ownerEmail", "==", email);
+    stopOwned = listen(query, snap => {
+      owned.clear();
+      snap.forEach(doc => owned.set(doc.id, doc.data()));
+      ready = true;
+      void refreshView();
+    }, error => {
+      closeOwnedWatch();
+      fail(error);
+    });
   };
   try {
-    const collection = db.collection("restaurants");
     if (adminMode) {
-      listen("invites", db.collection("ownerInvites"), snap => {
+      watchOwned();
+      listeners.push(listen(db.collection("ownerInvites"), snap => {
         invitations.clear();
         snap.forEach(doc => invitations.set(doc.id, doc.data()));
         invitationsStatus = "ready";
@@ -485,8 +517,8 @@ async function startAccess(user) {
         invitations.clear();
         invitationsStatus = "failed";
         renderPanel();
-      });
-      listen("legacyAccess", db.collection("access"), snap => {
+      }));
+      listeners.push(listen(db.collection("access"), snap => {
         legacyAccess.clear();
         snap.forEach(doc => {
           if (doc.id.toLowerCase() !== ADMIN) legacyAccess.set(doc.id, doc.data());
@@ -497,23 +529,37 @@ async function startAccess(user) {
         legacyAccess.clear();
         legacyAccessStatus = "failed";
         renderPanel();
-      });
+      }));
     } else {
       const approval = inviteRef(email);
-      listen("invite", approval, snap => {
+      listeners.push(listen(approval, snap => {
         invite = snap.data();
-        if (invite && !invite.revoked && !invite.usedStoreId && !invite.accountConfirmed) {
-          approval.update({accountConfirmed: true}).catch(error => {
-            console.warn("Could not record verified invitation sign-in.", error.code || error.message);
-          });
+        if (hasBoundApproval(user)) {
+          watchOwned();
+          return;
         }
-      });
-      listen("legacyGrant", accessRef(email), snap => { legacyGrant = snap.data(); });
+        closeOwnedWatch();
+        if (!activeApproval(invite) || invite.accountUid) {
+          deny("permission-denied");
+          return;
+        }
+        if (claiming) return;
+        claiming = true;
+        db.runTransaction(async tx => {
+          const pending = (await tx.get(approval)).data();
+          if (!current() || !activeApproval(pending)) {
+            throw Error(t("This email needs approval from the owner.", "هذا البريد يحتاج موافقة المالك."));
+          }
+          if (pending.accountUid === user.uid) return;
+          if (pending.accountUid) {
+            throw Error(t("This account needs a new approval from the owner.", "هذا الحساب يحتاج موافقة جديدة من المالك."));
+          }
+          tx.update(approval, {accountUid: user.uid, accountConfirmed: true});
+        }).catch(error => {
+          if (current() && !hasBoundApproval(user)) fail(error);
+        }).finally(() => { claiming = false; });
+      }));
     }
-    listen("owned", collection.where("ownerEmail", "==", email), snap => {
-      owned.clear();
-      snap.forEach(doc => owned.set(doc.id, doc.data()));
-    });
   } catch (error) { fail(error); }
 }
 async function adminAction(action, form, feedbackId = "adminMessage") {
@@ -614,9 +660,9 @@ byId("inviteOwner").onsubmit = async event => {
     await db.runTransaction(async tx => {
       const current = (await tx.get(ref)).data();
       if (!current) {
-        tx.set(ref, {pendingStoreId: id});
-      } else if (current.revoked === true) {
-        tx.update(ref, {revoked: false});
+        tx.set(ref, {pendingStoreId: id, approved: true});
+      } else if (!activeApproval(current)) {
+        tx.update(ref, {approved: true, revoked: false, accountUid: firebase.firestore.FieldValue.delete()});
       } else {
         throw Error(t("This email already has an active invitation.", "لهذا البريد دعوة مفعّلة بالفعل."));
       }
@@ -647,7 +693,8 @@ byId("createInvitedStore").onsubmit = async event => {
     await db.runTransaction(async tx => {
       const current = await tx.get(ref);
       const approval = current.data();
-      if (!expected || approval?.revoked === true || approval?.pendingStoreId !== expected || approval?.usedStoreId) {
+      if (!expected || !activeApproval(approval) || approval.accountUid !== user.uid
+        || approval.pendingStoreId !== expected || approval.usedStoreId) {
         throw Error(t("This approval is no longer available.", "هذه الموافقة لم تعد متاحة."));
       }
       tx.set(storeRef(expected), {name, ownerEmail: email, ownerActive: true});
