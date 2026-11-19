@@ -53,6 +53,13 @@ function openLedger(s) {
     }
   };
   frame.onload = () => {
+    if (session !== s) return;
+    const bar = byId("bar");
+    const frameWindow = frame.contentWindow;
+    bar.classList.remove("scrolled");
+    frameWindow.addEventListener("scroll", () => {
+      if (session === s) bar.classList.toggle("scrolled",frameWindow.scrollY > 24);
+    }, {passive:true});
     if (session === s && !s.record.value && frame.contentWindow.snapshot)
       window.trackerBridge.save(frame.contentWindow.snapshot());
   };
@@ -245,6 +252,7 @@ function renderPanel() {
   byId("grantTitle").hidden = showList;
   byId("authorizedTitle").hidden = !showList;
   byId("adminPanel").setAttribute("aria-labelledby", showList ? "authorizedTitle" : "grantTitle");
+  byId("copyAccessLink").hidden = showList;
   byId("assign").hidden = showList;
   byId("teamList").hidden = !showList;
   byId("inviteOwner").hidden = showList;
@@ -295,8 +303,9 @@ function renderToolbar() {
   selector.hidden = stores.size < 2;
   const canManageAccess = adminMode || manages(wanted);
   byId("share").hidden = byId("authorized").hidden = !canManageAccess;
+  byId("bar").dataset.role = canManageAccess ? "owner" : "worker";
   byId("useInvite").hidden = adminMode || !invite?.pendingStoreId;
-  byId("profileName").textContent = profileName;
+  byId("profileName").textContent = profileName || t("Add name","إضافة اسم");
   byId("emailDisplay").textContent = auth.currentUser?.email || "";
   if (byId("adminPanel").open && !adminMode && !manages(wanted)) byId("adminPanel").close();
 }
@@ -523,6 +532,15 @@ function openAccessPanel(mode) {
 }
 byId("share").onclick = () => openAccessPanel("grant");
 byId("authorized").onclick = () => openAccessPanel("list");
+byId("copyAccessLink").onclick = async () => {
+  const url = new URL("./",location.href).href;
+  try {
+    await navigator.clipboard.writeText(url);
+    byId("adminMessage").textContent = t("Link copied.","تم نسخ الرابط.");
+  } catch {
+    byId("adminMessage").textContent = url;
+  }
+};
 byId("closePanel").onclick = () => byId("adminPanel").close();
 byId("activeBranch").onchange = byId("branch").onchange = event => selectStore(event.target.value);
 document.addEventListener("tracker-language", () => {
