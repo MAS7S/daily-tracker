@@ -264,6 +264,30 @@ function deny(reason) {
     : reason);
 }
 let accessPanelMode = "grant";
+let accessGrants = null, accessListFailed = false;
+
+function appendRevocation(container, email, label, prompt, action) {
+  const row = document.createElement("div");
+  const address = document.createElement("bdi");
+  const button = document.createElement("button");
+  row.className = "member";
+  address.textContent = email;
+  button.type = "button";
+  button.textContent = label;
+  button.setAttribute("data-revoke", "");
+  button.onclick = async () => {
+    if (button.disabled || !window.confirm(prompt)) return;
+    button.disabled = true;
+    try {
+      await adminAction(action);
+    } finally {
+      button.disabled = false;
+    }
+  };
+  row.append(address, button);
+  container.append(row);
+}
+
 function renderPanel() {
   const showList = accessPanelMode === "list";
   byId("grantTitle").hidden = showList;
@@ -272,28 +296,28 @@ function renderPanel() {
   byId("copyAccessLink").hidden = showList;
   byId("inviteOwner").hidden = showList;
   byId("pendingApprovals").hidden = !showList;
+  byId("existingAccess").hidden = !showList;
+  const grants = byId("accessGrants");
+  grants.replaceChildren();
+  if (accessListFailed) {
+    grants.textContent = t("Could not load current access grants.", "تعذّر تحميل صلاحيات الدخول الحالية.");
+  } else if (!accessGrants) {
+    grants.textContent = t("Loading access grants…", "جارٍ تحميل صلاحيات الدخول…");
+  } else {
+    for (const [email, storeId] of accessGrants) {
+      appendRevocation(grants, email, t("Revoke access", "إلغاء الوصول"),
+        t("Revoke access for ", "إلغاء الوصول لـ ") + email + "?",
+        () => revokeAccess(email, storeId));
+    }
+    if (!grants.childElementCount) grants.textContent = t("No active access grants.", "لا توجد صلاحيات دخول مفعّلة.");
+  }
   const owners = byId("owners");
   owners.replaceChildren();
   for (const [email, approval] of invitations) {
     if (!approval.pendingStoreId) continue;
-    const row = document.createElement("div");
-    const label = document.createElement("bdi");
-    const button = document.createElement("button");
-    row.className = "member";
-    label.textContent = email;
-    button.textContent = t("Cancel approval", "إلغاء الموافقة");
-    button.setAttribute("data-revoke","");
-    button.onclick = async () => {
-      if (button.disabled || !window.confirm(t("Cancel approval for ", "إلغاء الموافقة لـ ") + email + "?")) return;
-      button.disabled = true;
-      try {
-        await adminAction(() => cancelApproval(email, approval.pendingStoreId));
-      } finally {
-        button.disabled = false;
-      }
-    };
-    row.append(label, button);
-    owners.append(row);
+    appendRevocation(owners, email, t("Cancel approval", "إلغاء الموافقة"),
+      t("Cancel approval for ", "إلغاء الموافقة لـ ") + email + "?",
+      () => cancelApproval(email, approval.pendingStoreId));
   }
   if (!owners.childElementCount) owners.textContent = t("No pending approvals.", "لا توجد موافقات معلّقة.");
 }
@@ -395,6 +419,8 @@ async function startAccess(user) {
   closeLedger();
   for (const id of ["adminPanel", "nameDialog", "storeNameDialog", "createDialog"]) byId(id).close();
   [owned, stores, invitations].forEach(map => map.clear());
+  accessGrants = null;
+  accessListFailed = false;
   invite = grant = worker = null;
   ready = nameLoading = false;
   profileName = "";
@@ -410,7 +436,7 @@ async function startAccess(user) {
   const current = () => identity === token && auth.currentUser?.uid === user.uid;
   const received = new Set();
   const fail = error => { if (current()) deny(error.code || error.message); };
-  const listen = (key, ref, apply) => {
+  const listen = (key, ref, apply, onError = fail) => {
     listeners.push(ref.onSnapshot({includeMetadataChanges: true}, snap => {
       if (!current() || snap.metadata.hasPendingWrites) return;
       if (snap.metadata.fromCache) {
@@ -422,11 +448,21 @@ async function startAccess(user) {
       ready = received.has("owned") && (adminMode || ["grant", "invite"].every(k => received.has(k)));
       if (key === "grant" && grant?.active && !owned.has(grant.storeId) && !worker) return;
       if (ready) void refreshView();
-    }, fail));
+    }, error => { if (current()) onError(error); }));
   };
   try {
     const collection = db.collection("restaurants");
     if (adminMode) {
+      listen("accessGrants", db.collection("access").where("active", "==", true), snap => {
+        accessGrants = snap.docs
+          .filter(doc => doc.id !== ADMIN)
+          .map(doc => [doc.id, doc.data().storeId]);
+        accessListFailed = false;
+        renderPanel();
+      }, () => {
+        accessListFailed = true;
+        renderPanel();
+      });
       listen("invites", db.collection("ownerInvites"), snap => {
         invitations.clear();
         snap.forEach(doc => invitations.set(doc.id, doc.data()));
@@ -493,6 +529,19 @@ function readName(id) {
   const name = byId(id).value.trim();
   if (!name) throw Error(t("Enter a name.", "أدخل اسمًا."));
   return name;
+}
+async function revokeAccess(email, storeId) {
+  if (!adminMode || email === ADMIN) return;
+  await db.runTransaction(async tx => {
+    const ref = accessRef(email);
+    const grant = (await tx.get(ref)).data();
+    if (!grant?.active) return;
+    if (grant.storeId !== storeId) {
+      throw Error(t("This access grant changed. Review the list and try again.",
+        "تغيّرت صلاحية هذا البريد. راجع القائمة وحاول مجددًا."));
+    }
+    tx.update(ref, {active: false});
+  });
 }
 async function cancelApproval(email, id) {
   if (!adminMode) return;

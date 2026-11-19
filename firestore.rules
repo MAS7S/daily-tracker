@@ -1,4 +1,7 @@
 rules_version = '2';
+
+// access/{lowercaseEmail}: storeId identifies the assigned store and active is a boolean.
+// Older grants may contain additional metadata, which is preserved on revocation.
 service cloud.firestore {
   match /databases/{database}/documents {
     function verified() {
@@ -73,9 +76,17 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60;
     }
-    // Existing legacy grants are read-only to app clients.
+    function validAccessGrant(grant) {
+      return grant.active is bool && grant.storeId is string
+        && grant.storeId.size() > 0 && grant.storeId.size() <= 1500;
+    }
     match /access/{address} {
-      allow get: if verified() && email() == address;
+      allow get: if admin() || (verified() && email() == address);
+      allow list: if admin();
+      allow update: if admin() && email() != address
+        && validAccessGrant(request.resource.data)
+        && resource.data.active == true && request.resource.data.active == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active']);
     }
     match /restaurants/{id} {
       allow get: if accessStore(id);
