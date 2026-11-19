@@ -108,6 +108,10 @@
     }
     #profileName { min-width: 0; overflow-wrap: anywhere; font-weight: 600; font-size: .85rem; }
     #bar button { font-size: .76rem; padding: 3px 8px; min-height: 32px; }
+    .access-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+    .access-buttons:has(> button[hidden]:first-child) { display: none; }
+    #bar .bar-row:first-child { flex-wrap: wrap; }
+    .member bdi { overflow-wrap: anywhere; }
     #bar #share { background: #076747; color: white; border-color: #076747; }
     #activeBranch { max-width: 45%; font: inherit; font-size: .76rem; }
 
@@ -191,7 +195,10 @@
       <div class="bar-row">
         <p id="status" role="status"></p>
         <button hidden id="retry" data-ar="تحديث">Refresh</button>
-        <button hidden id="share" data-ar="مشاركة">Share</button>
+        <div class="access-buttons">
+          <button hidden id="share" data-ar="منح الوصول">Grant access</button>
+          <button hidden id="authorized" data-ar="المصرّح لهم">Authorized people</button>
+        </div>
         <button id="logout" data-ar="خروج">Sign out</button>
       </div>
       <div class="bar-row">
@@ -212,7 +219,8 @@
     </div>
 
     <dialog id="adminPanel">
-      <h3 data-ar="مشاركة الفرع">Share store</h3>
+      <h3 id="grantTitle" data-ar="منح الوصول">Grant access</h3>
+      <h3 id="authorizedTitle" data-ar="المصرّح لهم" hidden>Authorized people</h3>
       <button id="closePanel" data-ar="تم">Done</button>
 
       <section id="ownStore" hidden>
@@ -220,8 +228,11 @@
           <span data-ar="الفرع الحالي">Current store</span>
           <select id="branch"></select>
         </label>
-        <p><span data-ar="فريق الفرع">Store team</span> <bdi id="branchOwner" hidden></bdi></p>
-        <section id="members"></section>
+        <div id="teamList" hidden>
+          <p><span data-ar="مالك الفرع">Store owner</span> <bdi id="branchOwner"></bdi></p>
+          <h4 data-ar="فريق الفرع">Store team</h4>
+          <section id="members"></section>
+        </div>
         <form id="assign">
           <label>
             <span data-ar="بريد العامل">Worker email</span>
@@ -237,7 +248,10 @@
           </label>
           <button data-ar="السماح بإنشاء فرع واحد">Approve one store</button>
         </form>
-        <div id="owners"></div>
+        <div id="pendingApprovals" hidden>
+          <h4 data-ar="موافقات إنشاء الفروع">Store creation approvals</h4>
+          <div id="owners"></div>
+        </div>
       </section>
 
       <p role="status" id="adminMessage"></p>

@@ -239,7 +239,16 @@ function deny(reason) {
 function manages(id) {
   return stores.has(id) && owned.has(id);
 }
+let accessPanelMode = "grant";
 function renderPanel() {
+  const showList = accessPanelMode === "list";
+  byId("grantTitle").hidden = showList;
+  byId("authorizedTitle").hidden = !showList;
+  byId("adminPanel").setAttribute("aria-labelledby", showList ? "authorizedTitle" : "grantTitle");
+  byId("assign").hidden = showList;
+  byId("teamList").hidden = !showList;
+  byId("inviteOwner").hidden = showList;
+  byId("pendingApprovals").hidden = !showList;
   const current = stores.get(wanted);
   byId("ownStore").hidden = !manages(wanted);
   const branch = byId("branch");
@@ -277,13 +286,15 @@ function renderPanel() {
     row.append(label, button);
     owners.append(row);
   }
+  if (!owners.childElementCount) owners.textContent = t("No pending approvals.", "لا توجد موافقات معلّقة.");
 }
 function renderToolbar() {
   const selector = byId("activeBranch");
   selector.replaceChildren(...[...stores].map(([id, store]) => new Option(store.name, id)));
   selector.value = wanted;
   selector.hidden = stores.size < 2;
-  byId("share").hidden = !adminMode && !manages(wanted);
+  const canManageAccess = adminMode || manages(wanted);
+  byId("share").hidden = byId("authorized").hidden = !canManageAccess;
   byId("useInvite").hidden = adminMode || !invite?.pendingStoreId;
   byId("profileName").textContent = profileName;
   byId("emailDisplay").textContent = auth.currentUser?.email || "";
@@ -503,12 +514,15 @@ byId("verify").onclick = async () => {
   } catch (error) { message(error.code || error.message); }
 };
 byId("leave").onclick = () => auth.signOut().catch(error => message(error.code));
-byId("share").onclick = () => {
+function openAccessPanel(mode) {
   if (!adminMode && !manages(wanted)) return;
+  accessPanelMode = mode;
   byId("adminMessage").textContent = "";
   renderPanel();
   byId("adminPanel").showModal();
-};
+}
+byId("share").onclick = () => openAccessPanel("grant");
+byId("authorized").onclick = () => openAccessPanel("list");
 byId("closePanel").onclick = () => byId("adminPanel").close();
 byId("activeBranch").onchange = byId("branch").onchange = event => selectStore(event.target.value);
 document.addEventListener("tracker-language", () => {
