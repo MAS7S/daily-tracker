@@ -198,6 +198,8 @@
     }
     #adminPanel .access-primary:hover:enabled { background: #05573d; }
     #inviteHelp { margin: 0; color: #476358; font-size: .9rem; }
+    #invitationListTitle { margin: 0; font-size: 1rem; }
+    #invitationAccountHelp { margin: 4px 0 10px; color: #476358; font-size: .875rem; }
     #invitations {
       display: grid;
       gap: 8px;
@@ -222,6 +224,7 @@
     }
     .invitation-details { display: grid; justify-items: start; gap: 4px; min-width: 0; }
     .invitation-details bdi { max-width: 100%; overflow-wrap: anywhere; font-weight: 650; }
+    .invitation-account { color: #476358; font-size: .8rem; }
     .invitation-status {
       padding: 2px 8px;
       border-radius: 999px;
@@ -232,6 +235,7 @@
     }
     .invitation-row[data-state="accepted"] .invitation-status { background: #dcefe4; color: #245d43; }
     .invitation-row[data-state="revoked"] .invitation-status { background: #e9eeeb; color: #4b5d55; }
+    .invitation-row[data-state="legacy"] .invitation-status { background: #e9eef4; color: #36516b; }
     #adminPanel button[data-revoke] { border-color: #ead0cc; color: #8a3328; font-size: .875rem; }
     #adminPanel button[data-revoke]:hover:enabled { background: #fff2f0; }
     #adminPanel .access-footer {
@@ -338,9 +342,11 @@
           <p id="inviteHelp" data-ar="بعد الموافقة، شارك رابط التطبيق مع المدعو ليدخل ببريده ويدير محله.">After approval, share the app link so the invitee can sign in and manage their store.</p>
           <button class="access-primary" data-ar="تأكيد الدعوة">Approve invitation</button>
         </form>
-        <div id="invitationList" hidden>
-          <ul id="invitations" role="list"></ul>
-        </div>
+        <section id="invitationList" aria-labelledby="invitationListTitle" hidden>
+          <h3 id="invitationListTitle" data-ar="عناوين البريد الإلكتروني">Email addresses</h3>
+          <p id="invitationAccountHelp" data-ar="يتأكد الحساب بعد تسجيل الدخول إلى التطبيق ببريد إلكتروني موثّق.">An account is confirmed after signing in to the app with a verified email address.</p>
+          <ul id="invitations" role="list" aria-describedby="invitationAccountHelp"></ul>
+        </section>
       </section>
 
       <p role="status" id="adminMessage"></p>
