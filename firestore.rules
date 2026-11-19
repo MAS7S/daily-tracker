@@ -130,7 +130,10 @@ service cloud.firestore {
       allow get: if hasAppAccess() && ownsEnabledStore(resource.data);
       allow list: if hasAppAccess() && resource.data.ownerEmail == email();
       allow create: if validStore(request.resource.data)
-        && hasAppAccess() && !admin() && consumesApproval(id, request.resource.data);
+        && ((admin() && id == 'primary-store'
+            && request.resource.data.ownerEmail == email()
+            && request.resource.data.ownerActive == true)
+          || (hasAppAccess() && !admin() && consumesApproval(id, request.resource.data)));
       allow update: if hasAppAccess() && ownsEnabledStore(resource.data)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
         && validStore(request.resource.data);

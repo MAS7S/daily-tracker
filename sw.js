@@ -1,4 +1,4 @@
-const VERSION = "2026-11-19.approval-gate.1";
+const VERSION = "2026-11-19.primary-ledger.1";
 const SCOPE = self.registration.scope;
 const PREFIX = "daily-tracker/" + SCOPE + "/";
 const CACHE = PREFIX + VERSION;

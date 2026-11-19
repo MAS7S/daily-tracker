@@ -360,6 +360,9 @@ function canCreateInvitedStore() {
   return !adminMode && hasBoundApproval(auth.currentUser) && owned.size === 0
     && Boolean(invite.pendingStoreId) && !invite.usedStoreId;
 }
+function canCreateStore() {
+  return ready && (adminMode ? owned.size === 0 : canCreateInvitedStore());
+}
 function renderToolbar() {
   const selector = byId("activeBranch");
   const switchStore = new Option(t("Switch store", "تبديل المحل"), "");
@@ -370,7 +373,7 @@ function renderToolbar() {
   const canManageAccess = adminMode;
   byId("share").hidden = byId("authorized").hidden = !canManageAccess;
   byId("bar").dataset.role = canManageAccess ? "owner" : "member";
-  byId("useInvite").hidden = !canCreateInvitedStore();
+  byId("useInvite").hidden = !canCreateStore();
   byId("profileName").textContent = profileName || t("Add name","إضافة اسم");
   byId("emailDisplay").textContent = auth.currentUser?.email || "";
   if (byId("adminPanel").open && !adminMode) byId("adminPanel").close();
@@ -444,7 +447,9 @@ async function refreshView() {
     closeLedger();
     workspace.hidden = false;
     gate.hidden = true;
-    statusText(adminMode ? "" : t("You have approval to create one store.", "لديك موافقة لإنشاء فرع واحد."));
+    statusText(adminMode
+      ? (owned.size === 0 ? t("Create your store to open a new ledger.", "أنشئ محلك لفتح دفتر جديد.") : "")
+      : t("You have approval to create one store.", "لديك موافقة لإنشاء فرع واحد."));
     renderToolbar();
   }
 }
@@ -674,7 +679,7 @@ byId("inviteOwner").onsubmit = async event => {
   }
 };
 byId("useInvite").onclick = () => {
-  if (!canCreateInvitedStore()) return;
+  if (!canCreateStore()) return;
   byId("createFeedback").textContent = "";
   byId("createDialog").showModal();
 };
@@ -685,8 +690,12 @@ byId("createInvitedStore").onsubmit = async event => {
     const name = readName("invitedStoreName");
     const user = auth.currentUser;
     const email = emailOf(user);
-    if (!canCreateInvitedStore()) {
+    if (!canCreateStore()) {
       throw Error(t("You can only create one store.", "يمكنك إنشاء محل واحد فقط."));
+    }
+    if (adminMode) {
+      await storeRef("primary-store").set({name, ownerEmail: email, ownerActive: true});
+      return;
     }
     const expected = invite.pendingStoreId;
     const ref = inviteRef(email);
