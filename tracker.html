@@ -215,8 +215,11 @@ function md(i){return dt(i).toLocaleDateString(LC(),{month:"short",day:"numeric"
 function num(v){var x=parseFloat(v);return isNaN(x)?0:x}
 function ex(r){return r.x.reduce(function(t,e){return t+num(e.a)},0)}
 function exk(r){return r.x.reduce(function(t,e){return t+(e.t==="credit"?num(e.a):0)},0)}
+function currentStoreName(){
+  return typeof bridge.storeName === "function" ? bridge.storeName() : store;
+}
 function refreshStoreTitle(){
-  const name = typeof bridge.storeName === "function" ? bridge.storeName() : store;
+  const name = currentStoreName();
   $("h1").textContent = name ? name + " – Daily Tracker" : "Daily Income & Expense Tracker";
 }
 if (typeof bridge.storeName === "function") $("storeNamePanel").hidden = true;
@@ -275,7 +278,7 @@ $("add").onclick=async function(){
   if(t.getDate()===1){
     if(!curOf(allP()).v){note("This month is complete. Go to the current month to continue.");return}
     var blob=null,fn="";
-    try{blob=buildPdf(reportPages());fn=(store?store.replace(/[^\w\u0600-\u06FF\- ]/g,"").trim().replace(/\s+/g,"-")+"-":"")+"report-"+data[0].d+"-to-"+data[data.length-1].d+".pdf"}catch(e){}
+    try{blob=buildPdf(reportPages());fn=reportFilename()}catch(e){}
     arch.push({store:store,data:data,saved:iso(new Date())});
     data=[{d:iso(t),c:"",k:"",x:[]}];save();render();window.scrollTo(0,0);
     var ok=false;if(blob){try{await saveBlob(blob,fn);ok=true}catch(e){}}
@@ -292,46 +295,209 @@ $("new").onclick=function(){
 };
 $("clearall").onclick=function(){ask("Clear all numbers and expenses? Dates stay.",function(){data.forEach(function(r){r.c="";r.k="";r.x=[]});save();render()})};
 var PW=1275,PH=1650;
+function reportFilename(){
+  const name = (currentStoreName() || "").replace(/[^\w\u0600-\u06FF -]/g, "").trim().replace(/\s+/g, "-");
+  const prefix = name ? name + "-" : "";
+  return prefix + "report-" + data[0].d + "-to-" + data[data.length - 1].d + ".pdf";
+}
+
 function reportPages(){
-  var P=[],c,x,y,C=[80,470,660,860,1050,1195];
-  function np(){c=document.createElement("canvas");c.width=PW;c.height=PH;x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,PW,PH);P.push(c);y=100}
-  function T(t,px,py,o){o=o||{};t=tr(String(t));x.direction=/[\u0600-\u06FF]/.test(t)?"rtl":"ltr";x.font=(o.b?"bold ":"")+(o.s||26)+"px Arial,Tahoma,sans-serif";x.fillStyle=o.c||"#111827";x.textAlign=o.a||"left";if(o.w)x.fillText(t,px,py,o.w);else x.fillText(t,px,py)}
-  function row(v,o){o=o||{};T(v[0],C[0]+8,y,o);for(var i=1;i<6;i++)T(v[i],C[i],y,Object.assign({a:"right"},o))}
-  function head(){x.fillStyle="#111827";x.fillRect(60,y-38,1155,56);row(["Date","Credit","Cash","Income","Expenses","Net inc."],{b:1,c:"#fff",s:24});y+=62}
-  var c0=0,k0=0,e0=0,ek0=0;data.forEach(function(r){c0+=num(r.c);k0+=num(r.k);e0+=ex(r);ek0+=exk(r)});
-  np();
-  T((store?store+" - ":"")+"Income & Expense Report",60,y,{b:1,s:40,w:1155});y+=48;
-  T(md(data[0].d)+" - "+md(data[data.length-1].d)+", "+dt(data[data.length-1].d).getFullYear()+"  ("+data.length+" days)",60,y,{s:26,c:"#6b7280"});y+=50;
-  x.fillStyle="#0b0f14";x.fillRect(60,y-34,1155,190);
-  T("NET PROFIT",86,y+2,{b:1,s:24,c:"#fff"});T(money(c0+k0-e0),86,y+60,{b:1,s:52,c:"#fff"});
-  T("Cash net: "+money(k0-(e0-ek0)),86,y+120,{b:1,s:28,c:"#86efac"});T("Credit net: "+money(c0-ek0),660,y+120,{b:1,s:28,c:"#93c5fd"});y+=206;
-  x.fillStyle="#fdecec";x.fillRect(60,y-34,1155,110);
-  T("EXPENSES",86,y+2,{b:1,s:24,c:"#b91c1c"});T(money(e0),86,y+56,{b:1,s:46,c:"#b91c1c"});y+=126;
-  x.fillStyle="#e8efff";x.fillRect(60,y-34,1155,190);
-  T("TOTAL INCOME",86,y+2,{b:1,s:24,c:"#1d4ed8"});T(money(c0+k0),86,y+60,{b:1,s:52,c:"#1d4ed8"});
-  T("Cash: "+money(k0),86,y+120,{b:1,s:28,c:"#15803d"});T("Credit: "+money(c0),660,y+120,{b:1,s:28,c:"#1d4ed8"});y+=226;
-  head();
-  data.forEach(function(r,i){
-    if(y>PH-140){np();head()}
-    var q=ex(r),inc=num(r.c)+num(r.k);
-    if(i%2===0){x.fillStyle="#f3f4f6";x.fillRect(60,y-38,1155,56)}
-    row([dt(r.d).toLocaleDateString(LC(),{weekday:"short",month:"short",day:"numeric"}),money(num(r.c)),money(num(r.k)),money(inc),money(q),money(inc-q)],{s:24});
-    y+=56;
-  });
-  if(y>PH-140){np()}
-  y+=30;
-  if(data.some(function(r){return r.x.length})){
-    if(y>PH-260){np()}
-    T("Expense details",60,y,{b:1,s:34});y+=56;
-    data.forEach(function(r){r.x.forEach(function(q){
-      if(y>PH-100){np()}
-      T(md(r.d),80,y,{s:24,c:"#6b7280"});
-      T((q.t==="credit"?tr("[Credit]")+" ":tr("[Cash]")+" ")+(q.c?tr(q.c)+(q.n?": ":""):"")+(q.n||(q.c?"":tr("(no description)"))),230,y,{s:24,w:750});
-      T(money(num(q.a)),1195,y,{a:"right",b:1,s:24,c:"#dc2626"});
-      y+=48;
-    })});
+  const pages = [];
+  const rtl = lang === "ar";
+  const margin = 70;
+  const width = PW - 2 * margin;
+  const bottom = 1516;
+  const ink = "#192825";
+  const muted = "#4c625c";
+  const green = "#156047";
+  const red = "#913740";
+  const line = "#dde8e3";
+  const stripe = "#f5f8f6";
+  const rowHeight = 48;
+  const lineHeight = 30;
+  const storeName = currentStoreName();
+  const dateOptions = {month:"short", day:"numeric", year:"numeric"};
+  const first = dt(data[0].d).toLocaleDateString(LC(), dateOptions);
+  const last = dt(data[data.length - 1].d).toLocaleDateString(LC(), dateOptions);
+  const period = first === last ? first : first + " – " + last;
+  const {c:credit, k:cash, e:expenses, n:net} = tot(data);
+  const creditExpenses = data.reduce((sum, day) => sum + exk(day), 0);
+  const daily = {
+    title:"Daily entries",
+    labels:["Date", "Credit", "Cash", "Income", "Expenses", "Net"],
+    widths:[245, 175, 175, 180, 180, 180],
+    amountStart:1
+  };
+  const details = {
+    title:"Expense details",
+    labels:["Date", "Payment", "Description", "Amount"],
+    widths:[200, 175, 565, 195],
+    amountStart:3
+  };
+  let context, y;
+
+  function box(start, top, w, h, color){
+    context.fillStyle = color;
+    context.fillRect(rtl ? PW - start - w : start, top, w, h);
   }
-  return P;
+
+  function paint(value, start, baseline, {size = 23, color = ink, bold = false, end = false, maxWidth = width} = {}){
+    context.font = (bold ? "700 " : "") + size + "px Arial,Tahoma,sans-serif";
+    context.fillStyle = color;
+    context.direction = /[\u0600-\u06ff]/.test(value) ? "rtl" : "ltr";
+    context.textAlign = rtl !== end ? "right" : "left";
+    context.fillText(value, rtl ? PW - start : start, baseline, maxWidth);
+  }
+
+  function newPage(){
+    const canvas = document.createElement("canvas");
+    canvas.width = PW;
+    canvas.height = PH;
+    context = canvas.getContext("2d");
+    const firstPage = pages.length === 0;
+    pages.push(canvas);
+
+    box(0, 0, PW, PH, "#fff");
+    box(margin, 59, width, 5, green);
+    paint(tr("Daily Tracker"), margin, 105, {size:23, bold:true, color:green});
+    paint(tr("Income & Expense Report"), margin, 161, {size:firstPage ? 49 : 39, bold:true});
+    if(storeName) paint(storeName, margin, 204, {size:27, bold:true});
+    paint(period, margin, storeName ? 240 : 205, {size:25, color:muted});
+    y = storeName ? 278 : 243;
+  }
+
+  function drawRow(table, cells, height, {fill = "#fff", color = ink, bold = false, size = 23} = {}){
+    box(margin, y, width, height, fill);
+    box(margin, y + height - 1, width, 1, line);
+    let start = margin;
+    cells.forEach((cell, index) => {
+      const cellWidth = table.widths[index];
+      const end = index >= table.amountStart;
+      const lines = Array.isArray(cell) ? cell : [cell];
+      const baseline = y + (height - (lines.length - 1) * lineHeight) / 2 + 8;
+      lines.forEach((value, n) => paint(value, start + (end ? cellWidth - 14 : 14), baseline + n * lineHeight, {
+        size, bold, color, end, maxWidth:cellWidth - 28
+      }));
+      start += cellWidth;
+    });
+    y += height;
+  }
+
+  function startTable(table, gap = 0){
+    const headingHeight = 46;
+    if(y + gap + headingHeight + 2 * rowHeight > bottom) newPage();
+    else y += gap;
+    paint(tr(table.title), margin, y + 28, {size:31, bold:true});
+    y += headingHeight;
+    drawRow(table, table.labels.map(tr), rowHeight, {fill:"#e9f2ee", color:green, bold:true, size:22});
+  }
+
+  function wrapDescription(text, maxWidth){
+    context.font = "23px Arial,Tahoma,sans-serif";
+    const lines = [];
+    let line = "";
+    for(const word of text.trim().split(/\s+/)){
+      const candidate = line ? line + " " + word : word;
+      if(context.measureText(candidate).width <= maxWidth){
+        line = candidate;
+        continue;
+      }
+      if(line) lines.push(line);
+      line = word;
+      if(context.measureText(word).width <= maxWidth) continue;
+      line = "";
+      for(const character of word){
+        if(line && context.measureText(line + character).width > maxWidth){
+          lines.push(line);
+          line = "";
+        }
+        line += character;
+      }
+    }
+    return [...lines, line];
+  }
+
+  newPage();
+  const cardGap = 16;
+  const cardWidth = (width - 2 * cardGap) / 3;
+  [
+    ["Total income", credit + cash, "#eef5fc", "#244d7c"],
+    ["Expenses", expenses, "#fbf0f1", red],
+    ["Net profit", net, net < 0 ? "#fbf0f1" : "#eef7f1", net < 0 ? red : green]
+  ].forEach(([label, amount, background, color], index) => {
+    const start = margin + index * (cardWidth + cardGap);
+    box(start, y, cardWidth, 124, background);
+    box(start, y, cardWidth, 4, color);
+    paint(tr(label), start + 20, y + 43, {bold:true, color, maxWidth:cardWidth - 40});
+    paint(money(amount), start + 20, y + 97, {size:43, bold:true, color, maxWidth:cardWidth - 40});
+  });
+  y += 142;
+
+  const half = width / 2;
+  box(margin, y, width, 60, stripe);
+  box(margin + half, y + 12, 1, 36, line);
+  [["Cash net", cash - (expenses - creditExpenses)], ["Credit net", credit - creditExpenses]]
+    .forEach(([label, amount], index) => {
+      const start = margin + index * half;
+      paint(tr(label), start + 18, y + 38, {color:muted, maxWidth:half / 2 - 24});
+      paint(money(amount), start + half - 18, y + 38, {
+        end:true, bold:true, color:amount < 0 ? red : green, maxWidth:half / 2 - 24
+      });
+    });
+  y += 60;
+
+  startTable(daily, 34);
+  data.forEach((day, index) => {
+    const creditIncome = num(day.c);
+    const cashIncome = num(day.k);
+    const income = creditIncome + cashIncome;
+    const spent = ex(day);
+    const date = dt(day.d).toLocaleDateString(LC(), {month:"short", day:"numeric", weekday:"short"});
+    const rowsNeeded = index === data.length - 1 ? 2 : 1;
+    if(y + rowHeight * rowsNeeded > bottom){
+      newPage();
+      startTable(daily);
+    }
+    drawRow(daily, [date, ...[creditIncome, cashIncome, income, spent, income - spent].map(money)], rowHeight, {
+      fill:index % 2 ? stripe : "#fff"
+    });
+  });
+  drawRow(daily, [tr("Total"), ...[credit, cash, credit + cash, expenses, net].map(money)], rowHeight, {
+    fill:"#e9f2ee", color:green, bold:true
+  });
+
+  if(data.some(day => day.x.length)){
+    startTable(details, 40);
+    let index = 0;
+    data.forEach(day => day.x.forEach(expense => {
+      const description = [expense.c && tr(expense.c), expense.n].filter(Boolean).join(" · ");
+      const lines = wrapDescription(description || tr("(no description)"), details.widths[2] - 28);
+      const method = tr(expense.t === "credit" ? "Credit" : "Cash");
+      const amount = money(num(expense.a));
+      const fill = index++ % 2 ? stripe : "#fff";
+      let offset = 0;
+      while(offset < lines.length){
+        if(y + rowHeight > bottom){
+          newPage();
+          startTable(details);
+        }
+        const count = Math.min(lines.length - offset, Math.floor((bottom - y - 18) / lineHeight));
+        const cells = [offset ? "" : md(day.d), offset ? "" : method, lines.slice(offset, offset + count), offset ? "" : amount];
+        drawRow(details, cells, 18 + count * lineHeight, {fill});
+        offset += count;
+      }
+    }));
+  }
+
+  pages.forEach((canvas, index) => {
+    context = canvas.getContext("2d");
+    box(margin, 1550, width, 1, line);
+    paint(tr("Daily Tracker"), margin, 1589, {size:19, color:muted});
+    paint(tr("Page") + " " + (index + 1) + " / " + pages.length, margin + width, 1589, {
+      size:19, color:muted, end:true
+    });
+  });
+  return pages;
 }
 function buildPdf(pages){
   var enc=new TextEncoder(),parts=[],off=0,xr=[],n=pages.length;
@@ -368,8 +534,7 @@ async function saveBlob(blob,fn){
 $("pdf").onclick=async function(){
   try{
     var blob=buildPdf(reportPages());
-    var fn=(store?store.replace(/[^\w\u0600-\u06FF\- ]/g,"").trim().replace(/\s+/g,"-")+"-":"")+"report-"+data[0].d+"-to-"+data[data.length-1].d+".pdf";
-    await saveBlob(blob,fn);
+    await saveBlob(blob,reportFilename());
   }catch(err){if(err&&err.code==="declined")return;note("Could not save the PDF. Please try again.")}
 };
 function backupText(){return JSON.stringify({app:"daily-income-expense-tracker",version:3,exported:new Date().toISOString(),store:store,data:data,arch:arch,cats:cats,chq:chq},null,2)}
@@ -621,6 +786,7 @@ var AR={
 "Undo? The expense booked for this check will be removed.":"التراجع؟ سيتم حذف المصروف المسجل لهذا الشيك.",
 "Income & Expense Report":"تقرير الدخل والمصروفات","NET PROFIT":"صافي الربح","EXPENSES":"المصروفات",
 "TOTAL INCOME":"إجمالي الدخل","Income":"الدخل","Net inc.":"الصافي","Expense details":"تفاصيل المصروفات",
+"Daily Tracker":"المتتبع اليومي","Daily entries":"العمليات اليومية","Payment":"الدفع","Description":"الوصف","Page":"صفحة",
 "[Credit]":"[بطاقة]","[Cash]":"[كاش]","(no description)":"(بدون وصف)","current":"الحالي",
 "Net":"الصافي","Total":"الإجمالي","Pending checks":"شيكات قادمة"
 };

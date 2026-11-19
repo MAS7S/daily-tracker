@@ -150,15 +150,22 @@
     @media(max-width:600px){#bar button,#bar #share{padding:6px 8px;min-height:38px}.access-buttons{gap:4px}}
     body:has(#gate:not([hidden])){background:#f7f3ed;color:#28261f}
     #gate{width:min(calc(100% - 28px),500px);margin:clamp(20px,10vh,110px) auto;padding:clamp(18px,5vw,34px);border:1px solid #e8e0d5;border-radius:20px;background:#fffdf9;box-shadow:0 12px 34px #39291512}
-    .login-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;color:#984534}
+    .login-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;color:#076747}
     #gate h1{font-size:clamp(1.8rem,5vw,2.35rem);margin:12px 0 16px}
     #gate button,#gate input{border-color:#e8e0d5;color:#28261f}
     #gate #language{float:none;margin:0;padding:6px 10px}
     #gate #google{min-height:44px;font-weight:650}
     #gate input{min-height:43px;background:#fff}
-    #gate button:focus-visible,#gate input:focus-visible{outline:2px solid #984534;outline-offset:2px}
-    #gate #login{background:#984534;border-color:#984534;color:white;font-weight:700;margin-top:15px}
-    #gate :is(#create,#forgot){width:auto;margin-inline-end:5px;font-size:.86rem}
+    #gate button:focus-visible,#gate input:focus-visible{outline:2px solid #076747;outline-offset:2px}
+    .password-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0 12px;margin-top:6px}
+    .password-row label{margin:0}
+    #gate #forgot{width:auto;min-height:40px;margin:0;padding:4px 0;border:0;background:transparent;color:#076747;font-size:.86rem;font-weight:600;text-decoration:underline;text-underline-offset:3px}
+    #gate :is(#login,#create){min-height:44px;font-weight:650}
+    #gate #login{margin-top:16px;background:#076747;border-color:#076747;color:white}
+    #gate #login:hover:enabled{background:#05573d}
+    #gate #create{margin-top:10px;background:transparent;border-color:#8ab4a4;color:#076747}
+    #gate #create:hover:enabled{background:#edf7f1}
+    #gate button:disabled{opacity:.6;cursor:wait}
     #gate :is(#message,#authFeedback):empty{display:none}
     #adminPanel{width:min(510px,calc(100% - 24px));max-height:calc(100dvh - 24px);border-radius:19px;padding:clamp(16px,4vw,26px);box-shadow:0 18px 44px #2d211d26}
     #adminPanel :is(h3,h4,p){margin:0}#adminPanel h3{font-size:1.25rem;margin-bottom:14px}
@@ -200,13 +207,15 @@
       <label for="email" data-ar="البريد الإلكتروني">Email</label>
       <input id="email" type="email" dir="ltr" autocomplete="username" required>
 
-      <label for="password" data-ar="كلمة المرور">Password</label>
+      <div class="password-row">
+        <label for="password" data-ar="كلمة المرور">Password</label>
+        <button id="forgot" type="button" data-ar="نسيت كلمة المرور">Forgot password</button>
+      </div>
       <input id="password" type="password" dir="ltr"
              autocomplete="current-password" required>
 
       <button id="login" type="submit" data-ar="تسجيل الدخول">Sign in</button>
       <button id="create" type="submit" data-ar="إنشاء حساب">Create account</button>
-      <button id="forgot" type="button" data-ar="نسيت كلمة المرور">Forgot password</button>
     </form>
 
     <div id="accountActions" hidden>
