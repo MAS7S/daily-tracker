@@ -205,11 +205,26 @@ function note(msg){$("mmsg").textContent=msg;var m=$("modal");m.classList.add("o
 function iso(t){return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0")}
 var lang="en";try{if(localStorage.getItem("daily-tracker-lang")==="ar")lang="ar"}catch(e){}
 function LC(){return lang==="ar"?"ar-u-ca-gregory-nu-latn":"en-US"}
-var store="";
-var data=[{d:iso(new Date()),c:"",k:"",x:[]}],arch=[],lb="",chq=[],cats=["Food & supplies","Salaries","Rent","Utilities","Maintenance","Cleaning & packaging","Other"];
-try{var s=bridge.read();if(s&&Array.isArray(s.data)&&s.data.length){data=s.data;store=String(s.store||"");if(Array.isArray(s.arch))arch=s.arch;lb=s.lb||"";if(Array.isArray(s.chq))chq=s.chq;if(Array.isArray(s.cats)&&s.cats.length)cats=s.cats}}catch(e){}
-arch.forEach(function(p){p.data.forEach(function(r){if(!Array.isArray(r.x))r.x=[]})});
-data.forEach(function(r){if(!Array.isArray(r.x))r.x=[]});
+var store, data, arch, lb, chq, cats;
+function loadLedger(){
+  const s=bridge.read();
+  if(s!==null && (!s || !Array.isArray(s.data) || !s.data.length)) throw Error("Invalid saved ledger");
+  data=s ? s.data : [{d:iso(new Date()),c:"",k:"",x:[]}];
+  store=String(s?.store||"");
+  arch=s?.arch||[];
+  lb=s?.lb||"";
+  chq=s?.chq||[];
+  cats=s?.cats?.length ? s.cats : ["Food & supplies","Salaries","Rent","Utilities","Maintenance","Cleaning & packaging","Other"];
+  arch.forEach(function(p){p.data.forEach(function(r){if(!Array.isArray(r.x))r.x=[]})});
+  data.forEach(function(r){if(!Array.isArray(r.x))r.x=[]});
+}
+function refreshLedger(){
+  loadLedger();
+  $("store").value=store;
+  render();
+  cqSum();
+}
+loadLedger();
 function snapshot(){return {store:store,data:data,arch:arch,lb:lb,cats:cats,chq:chq}}
 function save(){bridge.save(snapshot())}
 function money(n){return (n<0?"-":"")+"$"+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}

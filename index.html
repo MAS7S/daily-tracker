@@ -284,7 +284,7 @@
       <label for="email" data-ar="البريد الإلكتروني">Email</label>
       <input id="email" type="email" dir="ltr" autocomplete="username" required>
 
-      <div class="password-row">
+      <div id="passwordRow" class="password-row">
         <label for="password" data-ar="كلمة المرور">Password</label>
         <button id="forgot" type="button" data-ar="نسيت كلمة المرور">Forgot password</button>
       </div>
@@ -314,7 +314,7 @@
         <button hidden id="retry" data-ar="تحديث">Refresh</button>
         <div class="access-buttons">
           <button hidden id="share"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h.01m10-6h.01m0 12h.01M9 11l6-4m-6 6 6 4M5 12a2 2 0 1 0 4 0 2 2 0 0 0-4 0Zm10-6a2 2 0 1 0 4 0 2 2 0 0 0-4 0Zm0 12a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"/></svg><span data-ar="منح الوصول">Grant access</span></button>
-          <button hidden id="authorized"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-4m-6-6a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></svg><span data-ar="المصرّح لهم">Authorized people</span></button>
+          <button hidden id="authorized"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-4m-6-6a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></svg><span data-ar="المستخدمون">Users</span></button>
         </div>
         <button  id="logout"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 17 5-5-5-5m5 5H3m13-8h5v16h-5"/></svg><span data-ar="تسجيل الخروج">Sign out</span></button>
         <button type="button" id="workspaceLanguage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18m-9 9c5-5 5-13 0-18m0 18c-5-5-5-13 0-18m9 9a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg><span>العربية</span></button>
@@ -336,7 +336,7 @@
 
     <dialog id="adminPanel" aria-labelledby="grantTitle">
       <h2 id="grantTitle" data-ar="منح الوصول">Grant access</h2>
-      <h2 id="authorizedTitle" data-ar="المصرّح لهم" hidden>Authorized people</h2>
+      <h2 id="authorizedTitle" data-ar="المستخدمون" hidden>Users</h2>
 
       <section id="adminOnly" hidden>
         <form id="inviteOwner">
@@ -442,6 +442,9 @@
         }
       }
 
+      // Enable only after Email link is enabled on the existing Firebase password provider.
+      const emailLinkSignupEnabled = false;
+      let signInLink = emailLinkPending ? location.href : "";
       let creating = false;
       let busy = false;
       let feedback = ["", ""];
@@ -466,6 +469,18 @@
         el("password").autocomplete = creating ? "new-password" : "current-password";
         el("language").textContent = choose("العربية", "English");
         el("workspaceLanguage").querySelector("span").textContent = el("language").textContent;
+        const sendingLink = emailLinkSignupEnabled && creating && !signInLink;
+        if (sendingLink) el("login").textContent = choose("Send verification link", "إرسال رابط التحقق");
+        if (signInLink) {
+          el("authTitle").textContent = choose("Finish email sign-in", "إكمال الدخول بالبريد");
+          el("login").textContent = choose("Verify email and sign in", "تأكيد البريد وتسجيل الدخول");
+          el("forgot").hidden = el("create").hidden = true;
+          el("backToSignin").hidden = false;
+          el("password").autocomplete = "new-password";
+          el("google").hidden = el("googleIdentity").hidden = true;
+        }
+        el("passwordRow").hidden = el("password").hidden = sendingLink;
+        el("password").required = !sendingLink;
         el("authFeedback").textContent = choose(...feedback);
         translateMessage();
         document.dispatchEvent(new Event("tracker-language"));
@@ -568,7 +583,16 @@
         el("email").focus();
       }
       el("create").onclick = () => setCreating(true);
-      el("backToSignin").onclick = () => setCreating(false);
+      function finishLink() {
+        signInLink = "";
+        const url = new URL(location.href);
+        for (const key of ["apiKey","oobCode","mode","lang","continueUrl","tenantId"]) url.searchParams.delete(key);
+        history.replaceState(null, "", url.pathname + url.search + url.hash);
+        el("password").value = "";
+        setCreating(false);
+        document.dispatchEvent(new Event("tracker-email-link-finished"));
+      }
+      el("backToSignin").onclick = () => signInLink ? finishLink() : setCreating(false);
 
       // Use the exact Google credential checked below when authenticating with Firebase.
       const googleClientId = window.dailyTrackerGoogleClientId;
@@ -604,23 +628,54 @@
         event.preventDefault();
         const address = el("email").value.trim().toLowerCase();
         const password = el("password").value;
+        if (signInLink) {
+          run(async () => {
+            if (password.length < 6) {
+              show("Choose a password of at least 6 characters for a new account.", "اختر كلمة مرور من 6 أحرف على الأقل للحساب الجديد.");
+              return;
+            }
+            await authClient.signOut();
+            if (!await approved(address)) return;
+            const credential = await authClient.signInWithEmailLink(address, signInLink);
+            try {
+              if (credential.additionalUserInfo?.isNewUser) await credential.user.updatePassword(password);
+            } catch (error) {
+              await authClient.signOut();
+              finishLink();
+              show("Email verified. Use Forgot password to set your password.", "تم تأكيد البريد. استخدم «نسيت كلمة المرور» لتعيين كلمة مرورك.");
+              return;
+            }
+            finishLink();
+          });
+          return;
+        }
         if (!creating) {
-          run(() => authClient.signInWithEmailAndPassword(address,password));
+          run(async () => {
+            if (await approved(address)) await authClient.signInWithEmailAndPassword(address,password);
+          });
           return;
         }
 
         run(async () => {
           if (!await approved(address) || authClient.currentUser) return;
           authClient.languageCode = language;
+          if (emailLinkSignupEnabled) {
+            const continueUrl = new URL(location.pathname, location.origin).href;
+            await authClient.sendSignInLinkToEmail(address, {url:continueUrl, handleCodeInApp:true});
+            setCreating(false);
+            show("Open the emailed link, enter the same email, and choose your password.", "افتح الرابط المرسل لبريدك، وأدخل البريد نفسه واختر كلمة مرور.");
+            return;
+          }
           const {user} = await authClient.createUserWithEmailAndPassword(address,password);
           const verify = el("verify");
           verify.disabled = true;
           try {
             await user.sendEmailVerification();
             verify.dataset.sentFor = user.uid;
-            show("Verification link sent. Open it, then select Check access.",
-              "تم إرسال رابط التحقق. افتحه ثم اضغط تحقق من الوصول.");
+            setCreating(false);
+            show("Verification link sent. Open it, then sign in.", "أرسلنا رابط التحقق. افتحه ثم سجّل الدخول.");
           } finally {
+            if (authClient.currentUser?.uid === user.uid) await authClient.signOut();
             verify.disabled = false;
           }
         });

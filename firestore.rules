@@ -3,7 +3,8 @@ rules_version = '2';
 // ownerInvites/{lowercaseEmail}: pendingStoreId identifies the invitation's store.
 // Accepting it clears pendingStoreId and records the same ID in usedStoreId.
 // Approved and unrevoked invitations bind to the verified account's UID once per approval.
-// Revocation preserves both store IDs and historical email confirmation.
+// Only a verified sign-in can set accountConfirmed for the current approval.
+// profileEstablished records that profiles/{accountUid} exists with a saved name.
 // access/{lowercaseEmail}: legacy access history reviewed by the administrator.
 // restaurants/{id}: ownerEmail identifies the owner and ownerActive controls store availability.
 service cloud.firestore {
@@ -20,15 +21,20 @@ service cloud.firestore {
     function invitePath(address) {
       return /databases/$(database)/documents/ownerInvites/$(address);
     }
+    function profilePath(uid) {
+      return /databases/$(database)/documents/profiles/$(uid);
+    }
     function approvalIsActive(approval) {
       return approval.get('approved', false) == true && approval.get('revoked', false) == false;
     }
     function approvalBelongsToAccount(approval) {
-      return approvalIsActive(approval) && approval.get('accountUid', '') == request.auth.uid;
+      return approvalIsActive(approval) && approval.get('accountConfirmed', false) == true
+        && approval.get('accountUid', '') == request.auth.uid
+        && (!approval.get('profileEstablished', false) || exists(profilePath(request.auth.uid)));
     }
     function hasBoundApproval() {
       let path = invitePath(email());
-      return exists(path) && approvalBelongsToAccount(get(path).data);
+      return !deletionPending(email()) && exists(path) && approvalBelongsToAccount(get(path).data);
     }
     function hasAppAccess() {
       return verified() && (admin() || hasBoundApproval());
@@ -57,7 +63,9 @@ service cloud.firestore {
     }
     function validInvitation(invitation) {
       let uid = invitation.get('accountUid', '');
-      return invitation.keys().hasOnly(['pendingStoreId', 'usedStoreId', 'revoked', 'accountConfirmed', 'approved', 'accountUid'])
+      return invitation.keys().hasOnly(['pendingStoreId', 'usedStoreId', 'revoked', 'accountConfirmed', 'approved', 'accountUid', 'profileEstablished'])
+        && (!('profileEstablished' in invitation) || (invitation.profileEstablished == true
+          && invitation.get('accountConfirmed', false) == true && 'accountUid' in invitation))
         && invitation.get('revoked', false) is bool
         && invitation.get('accountConfirmed', true) == true
         && invitation.get('approved', true) == true
@@ -81,11 +89,16 @@ service cloud.firestore {
     function claimsOwnApproval(address) {
       return verified() && email() == address
         && approvalIsActive(resource.data)
-        && !('accountUid' in resource.data)
+        && resource.data.get('accountUid', request.auth.uid) == request.auth.uid
         && request.resource.data.accountUid == request.auth.uid
-        && (resource.data.get('accountConfirmed', false) == false
-          || request.resource.data.accountConfirmed == true)
+        && request.resource.data.accountConfirmed == true
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountUid', 'accountConfirmed']);
+    }
+    function establishesProfile(address) {
+      return verified() && email() == address && approvalBelongsToAccount(resource.data)
+        && request.resource.data.profileEstablished == true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['profileEstablished'])
+        && validProfile(getAfter(profilePath(request.auth.uid)).data);
     }
     function managesApproval(address) {
       let before = resource.data;
@@ -94,7 +107,8 @@ service cloud.firestore {
       return admin() && address != email()
         && ((after.revoked == true && changed.hasOnly(['revoked']))
           || (!approvalIsActive(before) && after.approved == true && after.revoked == false
-            && !('accountUid' in after) && changed.hasOnly(['approved', 'revoked', 'accountUid'])));
+            && !after.keys().hasAny(['accountUid', 'accountConfirmed', 'profileEstablished'])
+            && changed.hasOnly(['approved', 'revoked', 'accountUid', 'accountConfirmed', 'profileEstablished'])));
     }
     // This path stores no documents. A permitted point lookup signals active approval
     // without exposing the private invitation or accepting queries on approved emails.
@@ -103,7 +117,7 @@ service cloud.firestore {
         && resource == null
         && address == address.lower() && address.size() <= 254
         && (address == 'malekshahbien@gmail.com'
-          || (exists(invitePath(address)) && approvalIsActive(get(invitePath(address)).data)));
+          || (!deletionPending(address) && exists(invitePath(address)) && approvalIsActive(get(invitePath(address)).data)));
     }
 
     function deletionPending(address) {
@@ -126,14 +140,18 @@ service cloud.firestore {
       allow update: if !deletionPending(address) && validInvitation(request.resource.data)
         && (managesApproval(address)
           || createsApprovedStore(address)
-          || claimsOwnApproval(address));
+          || claimsOwnApproval(address)
+          || establishesProfile(address));
+    }
+    function validProfile(profile) {
+      return profile.keys().hasOnly(['name']) && profile.name is string
+        && profile.name.size() > 0 && profile.name.size() <= 60;
     }
     match /profiles/{uid} {
       allow get: if hasAppAccess() && request.auth.uid == uid;
       allow create, update: if hasAppAccess() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['name'])
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60;
+        && validProfile(request.resource.data)
+        && (admin() || getAfter(invitePath(email())).data.get('profileEstablished', false) == true);
     }
     match /access/{address} {
       allow get: if admin();

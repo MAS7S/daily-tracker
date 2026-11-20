@@ -91,6 +91,16 @@ function firebase(projectId, accessToken) {
 
   return {
     name,
+    async grantPage(after, limit) {
+      const query = {
+        from: [{collectionId: 'ownerInvites'}],
+        orderBy: [{field: {fieldPath: '__name__'}, direction: 'ASCENDING'}], limit
+      };
+      if (after) query.startAt = {values: [{referenceValue: after}], before: false};
+      const response = await post(documentsUrl + ':runQuery', {structuredQuery: query});
+      if (!response.ok) throw new Error('Reading grant page failed');
+      return (await response.json()).map(row => row.document).filter(Boolean);
+    },
     async get(collection, id) {
       const response = await fetch(documentsUrl + '/' + collection + '/' + encodeURIComponent(id), { headers });
       if (response.status === 404) return null;
@@ -134,6 +144,50 @@ function protectOwner(target, owner) {
   }
 }
 
+function removeVersion(doc) {
+  return { delete: doc.name, currentDocument: { updateTime: doc.updateTime } };
+}
+
+// A pending invitation has no Auth dependency until its first verified sign-in.
+async function reconcileGrant(api, grant, addresses) {
+  const email = normalizeEmail(grant?.name.split('/').pop());
+  const uid = grant?.fields?.accountUid?.stringValue;
+  if (!email || email === adminEmail || !validUid(uid)) return {removed: false};
+  const target = await api.findUser({localId: [uid]});
+  const sameAccount = target?.localId === uid && normalizeEmail(target.email) === email;
+  const profile = await api.get('profiles', uid);
+  const missingProfile = grant.fields.profileEstablished?.booleanValue === true && !profile;
+  if (sameAccount && !target.disabled && target.emailVerified === true && !missingProfile &&
+      grant.fields.revoked?.booleanValue !== true && grant.fields.approved?.booleanValue === true) {
+    return {removed: false};
+  }
+  const legacy = await Promise.all(addresses.map(address => api.get('access', address)));
+  const writes = [grant, ...legacy.filter(Boolean)].map(removeVersion);
+  // A changed email may now use this UID and its profile under a different approval.
+  if (profile && (!target || sameAccount)) writes.push(removeVersion(profile));
+  await api.commit(writes);
+  return {removed: true};
+}
+
+async function sweepGrants(env) {
+  const api = firebase(env.FIREBASE_PROJECT_ID, await serviceAccessToken(env));
+  const cursor = await api.get('_maintenance', 'authReconciliation');
+  const after = cursor?.fields?.after?.referenceValue;
+  const page = await api.grantPage(after, 5);
+  for (const grant of page) {
+    const address = grant.name.split('/').pop();
+    try { await reconcileGrant(api, grant, [...new Set([address, normalizeEmail(address)])]); }
+    catch (error) { if (!(error instanceof RequestError && error.status === 409)) throw error; }
+  }
+  const next = page.length === 5 ? page[page.length - 1].name : null;
+  if (next || cursor) {
+    const name = api.name('_maintenance', 'authReconciliation');
+    const currentDocument = cursor ? {updateTime: cursor.updateTime} : {exists: false};
+    await api.commit([next ? {update: {name, fields: {after: {referenceValue: next}}}, currentDocument}
+      : {delete: name, currentDocument}]);
+  }
+}
+
 async function revoke(api, owner, email, addresses) {
   const pendingName = api.name('accessRevocations', email);
   let pending = await api.get('accessRevocations', email);
@@ -144,10 +198,19 @@ async function revoke(api, owner, email, addresses) {
       pending = await api.get('accessRevocations', email);
       if (!pending) throw new RequestError(404, 'grant-missing');
     } else {
-      protectOwner(await api.findUser({ email: [email] }), owner);
+      const target = await api.findUser({ email: [email] });
+      protectOwner(target, owner);
+      const boundUid = grants.find(doc => doc.name === api.name('ownerInvites', email))?.fields?.accountUid?.stringValue;
+      const uid = boundUid || target?.localId || '';
+      if (uid && (!validUid(uid) || uid === owner.localId)) throw new RequestError(409, 'account-changed');
+      const profile = uid && (!target || uid === target.localId) ? await api.get('profiles', uid) : null;
+      // A UID now registered under another email belongs to a different authorization.
+      const boundTarget = uid && !target ? await api.findUser({localId:[uid]}) : target;
+      const sameIdentity = !boundTarget || (boundTarget.localId === uid && normalizeEmail(boundTarget.email) === email);
       const writes = [
-        ...grants.map(grant => ({ delete: grant.name, currentDocument: { updateTime: grant.updateTime } })),
-        { update: { name: pendingName, fields: {} }, currentDocument: { exists: false } }
+        ...grants.map(removeVersion),
+        ...(profile && sameIdentity ? [removeVersion(profile)] : []),
+        { update: { name: pendingName, fields: {uid:{stringValue: sameIdentity ? uid : ''}} }, currentDocument: { exists: false } }
       ];
       await api.commit(writes);
       pending = await api.get('accessRevocations', email);
@@ -187,12 +250,14 @@ async function revoke(api, owner, email, addresses) {
 }
 
 export default {
+  async scheduled(_event, env) { await sweepGrants(env); },
   async fetch(request, env) {
     const origin = request.headers.get('Origin');
     const headers = { 'Cache-Control': 'no-store', Vary: 'Origin' };
     if (origin === env.ALLOWED_ORIGIN) headers['Access-Control-Allow-Origin'] = origin;
     const respond = (value, status) => Response.json(value, { status, headers });
-    if (!['/revoke','/revoke-confirmed'].includes(new URL(request.url).pathname)) return respond({ code: 'not-found' }, 404);
+    const path = new URL(request.url).pathname;
+    if (!['/revoke','/revoke-confirmed','/reconcile-access'].includes(path)) return respond({ code: 'not-found' }, 404);
     if (!origin || origin !== env.ALLOWED_ORIGIN) return respond({ code: 'origin-denied' }, 403);
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: {
@@ -216,7 +281,11 @@ export default {
         typeof address !== 'string' || address.length > 254 || normalizeEmail(address) !== email)) {
         throw new RequestError(400, 'invalid-email-aliases');
       }
-      return respond(await revoke(api, owner, email, [...new Set([email, ...aliases])]), 200);
+      const addresses = [...new Set([email, ...aliases])];
+      if (path === '/reconcile-access') {
+        return respond(await reconcileGrant(api, await api.get('ownerInvites', email), addresses), 200);
+      }
+      return respond(await revoke(api, owner, email, addresses), 200);
     } catch (error) {
       if (error instanceof RequestError) return respond({ code: error.message }, error.status);
       return respond({ code: 'service-error' }, 502);

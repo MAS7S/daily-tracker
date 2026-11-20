@@ -42,8 +42,12 @@ function schedule(s, delay = 500) {
 }
 function openLedger(s) {
   if (s !== session) return;
+  if (s.open) {
+    frame.contentWindow?.refreshLedger?.();
+    return;
+  }
   window.trackerBridge = {
-    read: () => s.record.value,
+    read: () => structuredClone(s.record.value),
     storeName: () => stores.get(s.branchId)?.name || "",
     canEditStoreName: () => s === session && s.branchId === wanted && owned.has(s.branchId),
     editStoreName: () => { if (s === session && s.branchId === wanted) openStoreNameDialog(); },
@@ -82,8 +86,6 @@ function openLedger(s) {
         previousScroll = current;
       }
     }, {passive:true});
-    if (session === s && !s.record.value && frame.contentWindow.snapshot)
-      window.trackerBridge.save(frame.contentWindow.snapshot());
   };
   frame.src = "./tracker.html";
   s.open = true;
@@ -106,7 +108,9 @@ async function readValue(s, head) {
     s.ref.collection("parts").doc(String(i)).get({source:"server"})));
   if (chunks.some(doc => !doc.exists || doc.data().revision !== head.revision))
     throw Error("revision-changed");
-  return JSON.parse(chunks.map(doc => doc.data().text).join(""));
+  const value = JSON.parse(chunks.map(doc => doc.data().text).join(""));
+  if (!value || !Array.isArray(value.data) || !value.data.length) throw Error("invalid-ledger");
+  return value;
 }
 async function push(s) {
   const record = s.record;
@@ -139,15 +143,15 @@ async function reconcile(s) {
     const snap = await s.ref.get({source:"server"});
     if (s !== session) return;
     const head = snap.exists ? snap.data() : {revision:null,parts:0};
-    if (head.revision !== s.record.revision) {
+    if (snap.exists && (typeof head.revision !== "string" || !head.revision ||
+        !Number.isInteger(head.parts) || head.parts < 1 || head.parts > 160)) throw Error("invalid-ledger");
+    if (head.revision !== s.record.revision || (!s.open && snap.exists && !s.record.dirty)) {
       const remote = head.parts ? await readValue(s, head) : null;
       if (s !== session) return;
       if (s.record.dirty && JSON.stringify(s.record.value) !== JSON.stringify(remote)) {
         showConflict(s, head, remote); return;
       }
-      if (s.open && editing() && !s.record.dirty) {
-        statusText("وصل تحديث من جهاز آخر. سيظهر بعد إنهاء التحرير."); schedule(s, 2500); return;
-      }
+      if (s.open && editing() && !s.record.dirty) { schedule(s, 2500); return; }
       setState(s, {revision:head.revision,value:remote,dirty:false});
       openLedger(s);
     } else {
@@ -163,6 +167,7 @@ async function reconcile(s) {
     if (s.storageError) return;
     if (error.message === "revision-changed") schedule(s, 100);
     else if (error.code === "permission-denied") deny(error.code);
+    else if (error.message === "invalid-ledger" || error instanceof SyntaxError) statusText(t("Could not read the saved ledger. Check its backup before editing.", "تعذّرت قراءة الدفتر المحفوظ. راجع نسخته الاحتياطية قبل التعديل."));
     else if (error.message === "ledger-too-large") statusText("تجاوز الدفتر حد المزامنة. صدّر نسخة احتياطية قبل تقليل حجمه.");
     else {
       statusText(s.open ? "بانتظار الاتصال للمزامنة • النسخة على الجهاز" : "يلزم الاتصال لتحميل الدفتر أول مرة. " + (error.code || ""));
@@ -228,7 +233,8 @@ function init() {
   if (config.projectId === "restaurant-3be9c" || config.authDomain?.startsWith("restaurant-3be9c.")) { message("استخدم إعدادات مشروع Firebase الجديد المستقل."); return; }
   firebase.initializeApp(config);
   auth = firebase.auth(); db = firebase.firestore();
-  auth.onAuthStateChanged(startAccess);
+  emailLinkPending = auth.isSignInWithEmailLink(location.href);
+  auth.onAuthStateChanged(user => { if (!emailLinkPending) void startAccess(user); });
 
 }
 const pendingDeletions = new Set();
@@ -241,9 +247,13 @@ const inviteRef = email => db.collection("ownerInvites").doc(email);
 const profileRef = user => db.collection("profiles").doc(user.uid);
 const t = (en, ar) => document.documentElement.lang === "ar" ? ar : en;
 const cacheNotice = () => t("Connect to verify store access.", "اتصل بالإنترنت للتحقق من صلاحية الفرع.");
+let emailLinkPending = false;
 let generation = 0, identity = 0, wanted = "";
 let listeners = [];
-let adminMode = false, profileName = "", nameLoading = false, invite, ready;
+let sessionIdentity, checkingSession, retryAccess = false;
+let auditingGrants = false, lastGrantAudit = 0;
+let profileReady = false;
+let adminMode = false, profileName = "", invite, ready;
 const owned = new Map(), stores = new Map(), invitations = new Map(), legacyAccess = new Map();
 
 function closeLedger() {
@@ -254,7 +264,7 @@ function closeLedger() {
   window.trackerBridge = null;
   if (old) { clearTimeout(old.timer); old.release?.(); }
   frame.onload = null;
-  frame.src = "about:blank";
+  if (frame.getAttribute("src") && frame.getAttribute("src") !== "about:blank") frame.src = "about:blank";
   workspace.hidden = true;
   gate.hidden = false;
   byId("choices").hidden = true;
@@ -263,7 +273,7 @@ function deny(reason) {
   closeLedger();
   for (const id of ["adminPanel", "nameDialog", "storeNameDialog", "createDialog"]) byId(id).close();
   const user = auth?.currentUser;
-  if (reason !== "permission-denied" || !user || emailOf(user) === ADMIN) {
+  if (reason !== "permission-denied" || !user) {
     message(reason);
     return;
   }
@@ -302,8 +312,10 @@ function renderPanel() {
   byId("adminPanel").setAttribute("aria-labelledby", showList ? "authorizedTitle" : "grantTitle");
   byId("copyAccessLink").hidden = showList;
   byId("inviteOwner").hidden = showList;
-  byId("invitationList").hidden = !showList;
-  if (!showList) return;
+  byId("invitationList").hidden = false;
+  byId("invitationListTitle").textContent = showList
+    ? t("Verified users", "المستخدمون الموثّقون")
+    : t("Pending invitations and previous access", "الدعوات المعلّقة والصلاحيات السابقة");
 
   const list = byId("invitations");
   list.replaceChildren();
@@ -313,7 +325,12 @@ function renderPanel() {
   }
 
   for (const email of pendingDeletions) entries.set(email, { deletionPending: true });
-  const statuses = [invitationsStatus, legacyAccessStatus];
+  for (const [email, approval] of entries) {
+    const verifiedUser = activeApproval(approval) && Boolean(approval.accountUid)
+      && approval.accountConfirmed === true && !approval.legacy;
+    if (showList !== verifiedUser) entries.delete(email);
+  }
+  const statuses = showList ? [invitationsStatus] : [invitationsStatus, legacyAccessStatus];
   const incomplete = statuses.includes("failed");
   if (incomplete || !entries.size) {
     const notice = document.createElement("li");
@@ -322,7 +339,8 @@ function renderPanel() {
       ? t("Some email addresses could not be loaded.", "تعذّر تحميل بعض عناوين البريد الإلكتروني.")
       : statuses.includes("loading")
         ? t("Loading email addresses…", "جارٍ تحميل عناوين البريد الإلكتروني…")
-        : t("No authorized email addresses yet.", "لا توجد عناوين بريد مصرّح لها بعد.");
+        : showList ? t("No verified users yet.", "لا يوجد مستخدمون موثّقون بعد.")
+        : t("No pending invitations.", "لا توجد دعوات معلّقة.");
     list.append(notice);
   }
 
@@ -339,7 +357,7 @@ function renderPanel() {
     if (approval.revoked === true) state = "revoked";
     else if (approval.legacy) state = "legacy";
     else if (!activeApproval(approval)) state = "needsApproval";
-    else if (approval.usedStoreId) state = "accepted";
+    else if (approval.accountConfirmed && approval.accountUid) state = "accepted";
     const row = document.createElement("li");
     row.className = "invitation-row";
     row.dataset.state = state;
@@ -352,7 +370,7 @@ function renderPanel() {
     status.textContent = labels[state];
     const account = document.createElement("small");
     account.className = "invitation-account";
-    account.textContent = approval.accountConfirmed === true || approval.usedStoreId
+    account.textContent = approval.accountConfirmed === true && approval.accountUid
       ? t("Verified sign-in recorded", "سبق تأكيد الدخول")
       : t("No verified sign-in recorded", "لا يوجد دخول مؤكّد حتى الآن");
     details.append(address, status, account);
@@ -382,7 +400,7 @@ function activeApproval(approval) {
   return approval?.approved === true && (approval.revoked === undefined || approval.revoked === false);
 }
 function hasBoundApproval(user) {
-  return Boolean(user && activeApproval(invite) && invite.accountUid === user.uid);
+  return Boolean(user && activeApproval(invite) && invite.accountUid === user.uid && invite.accountConfirmed === true);
 }
 function canCreateInvitedStore() {
   return !adminMode && hasBoundApproval(auth.currentUser) && owned.size === 0
@@ -422,7 +440,6 @@ function selectStore(id) {
 async function refreshView() {
   if (!ready || !navigator.onLine) return;
   const user = auth.currentUser;
-  const token = identity;
   const directEmail = emailOf(user);
   if (!user) return;
   stores.clear();
@@ -445,34 +462,21 @@ async function refreshView() {
     deny("permission-denied");
     return;
   }
+  if (!profileReady) return;
   if (!profileName) {
-    if (nameLoading || byId("nameDialog").open) return;
-    nameLoading = true;
-    try {
-      const snap = await profileRef(user).get({source: "server"});
-      if (token !== identity) return;
-      if (!adminMode && !hasBoundApproval(user)) return;
-      if (!adminMode && !stores.size && !canCreateInvitedStore()) return;
-      profileName = snap.data()?.name || "";
-      if (!profileName) {
-        byId("userName").value = user.displayName || "";
-        byId("nameFeedback").textContent = "";
-        byId("nameDialog").showModal();
-        return;
-      }
-    } catch (error) {
-      if (token === identity) deny(error.code || error.message);
-      return;
-    } finally {
-      if (token === identity) nameLoading = false;
+    if (!byId("nameDialog").open) {
+      byId("userName").value = user.displayName || "";
+      byId("nameFeedback").textContent = "";
+      byId("nameDialog").showModal();
     }
+    return;
   }
   if (stores.size) {
     const last = sessionStorage.getItem(prefix + directEmail + ":store");
     selectStore(stores.has(wanted) ? wanted : stores.has(last) ? last : stores.keys().next().value);
     frame.contentWindow?.refreshStoreTitle?.();
   } else {
-    closeLedger();
+    if (wanted || session) closeLedger();
     workspace.hidden = false;
     gate.hidden = true;
     statusText(adminMode
@@ -483,6 +487,18 @@ async function refreshView() {
 }
 async function startAccess(user) {
   const token = ++identity;
+  if (sessionIdentity && sessionIdentity.uid !== user?.uid) {
+    try { sessionStorage.removeItem(prefix + sessionIdentity.email + ":store"); } catch {}
+    byId("userName").value = byId("ownerEmail").value = "";
+    byId("adminMessage").textContent = byId("emailDisplay").textContent = byId("profileName").textContent = "";
+    byId("invitations").replaceChildren();
+  }
+  sessionIdentity = user ? {uid:user.uid, email:emailOf(user), verified:user.emailVerified} : null;
+  checkingSession = null;
+  retryAccess = false;
+  lastGrantAudit = 0;
+  pendingDeletions.clear();
+  workspace.inert = false;
   listeners.forEach(stop => stop());
   listeners = [];
   closeLedger();
@@ -490,7 +506,7 @@ async function startAccess(user) {
   [owned, stores, invitations, legacyAccess].forEach(map => map.clear());
   invitationsStatus = legacyAccessStatus = "loading";
   invite = null;
-  ready = nameLoading = false;
+  ready = profileReady = false;
   profileName = "";
   const email = emailOf(user);
   adminMode = email === ADMIN;
@@ -500,32 +516,39 @@ async function startAccess(user) {
   byId("googleIdentity").hidden = !!user;
   byId("authForm").hidden = byId("google").hidden = byId("forgot").hidden = !!user;
   if (!user) {
+    byId("password").value = "";
+    delete byId("verify").dataset.sentFor;
     if (accessRevoked) showRevokedMessage();
     else message("");
     return;
   }
   accessRevoked = false;
-  if (!user.emailVerified) { message("أكّد بريدك ثم اضغط تحقق من الوصول."); return; }
-  message("جارٍ التحقق من صلاحية الدخول…");
   const current = () => identity === token && auth.currentUser?.uid === user.uid;
+  const snapshotIdentity = sessionIdentity;
+  if (!await validateIdentity(user, snapshotIdentity, true) || !current()) return;
+  if (!snapshotIdentity.verified && user.emailVerified) {
+    await requestVerifiedSignIn();
+    return;
+  }
+  sessionIdentity.verified = user.emailVerified;
+  byId("verify").hidden = user.emailVerified;
+  if (!user.emailVerified) { message("أكّد بريدك ثم اضغط تحقق من الوصول."); return; }
+  message("");
   const fail = error => { if (current()) deny(error.code || error.message); };
   const listen = (ref, apply, onError = fail) => {
-    let received = false;
     return ref.onSnapshot({includeMetadataChanges: true}, snap => {
       if (!current() || snap.metadata.hasPendingWrites) return;
-      if (snap.metadata.fromCache) {
-        if (received) deny(cacheNotice());
-        return;
-      }
-      received = true;
+      if (snap.metadata.fromCache) return;
       apply(snap);
     }, error => { if (current()) onError(error); });
   };
-  let stopOwned = null;
+  let stopOwned = null, stopProfile = null;
   let claiming = false;
   const closeOwnedWatch = () => {
     stopOwned?.();
-    stopOwned = null;
+    stopProfile?.();
+    stopOwned = stopProfile = null;
+    profileReady = false;
     ready = false;
     owned.clear();
   };
@@ -533,6 +556,18 @@ async function startAccess(user) {
 
   const watchOwned = () => {
     if (stopOwned) return;
+    stopProfile = listen(profileRef(user), snap => {
+      if (!snap.exists && !adminMode && invite?.profileEstablished === true) {
+        deny("permission-denied");
+        return;
+      }
+      profileName = snap.data()?.name || "";
+      profileReady = true;
+      if (profileName && !adminMode && !invite?.profileEstablished) {
+        inviteRef(email).update({profileEstablished:true}).catch(fail);
+      }
+      void refreshView();
+    });
     const query = db.collection("restaurants").where("ownerEmail", "==", email);
     stopOwned = listen(query, snap => {
       owned.clear();
@@ -557,6 +592,7 @@ async function startAccess(user) {
         snap.forEach(doc => invitations.set(doc.id, doc.data()));
         invitationsStatus = "ready";
         renderPanel();
+        void auditBoundGrants();
       }, () => {
         invitations.clear();
         invitationsStatus = "failed";
@@ -583,7 +619,7 @@ async function startAccess(user) {
           return;
         }
         closeOwnedWatch();
-        if (!activeApproval(invite) || invite.accountUid) {
+        if (!activeApproval(invite) || (invite.accountUid && invite.accountUid !== user.uid)) {
           deny("permission-denied");
           return;
         }
@@ -594,8 +630,8 @@ async function startAccess(user) {
           if (!current() || !activeApproval(pending)) {
             throw Error(t("This email needs approval from the owner.", "هذا البريد يحتاج موافقة المالك."));
           }
-          if (pending.accountUid === user.uid) return;
-          if (pending.accountUid) {
+          if (pending.accountUid === user.uid && pending.accountConfirmed === true) return;
+          if (pending.accountUid && pending.accountUid !== user.uid) {
             throw Error(t("This account needs a new approval from the owner.", "هذا الحساب يحتاج موافقة جديدة من المالك."));
           }
           tx.update(approval, {accountUid: user.uid, accountConfirmed: true});
@@ -653,14 +689,91 @@ async function revokeEmailAccess(address) {
     throw Error(t("Account deletion could not be confirmed. Try again.", "تعذّر تأكيد حذف الحساب. أعد المحاولة."));
   }
 }
-byId("checkAccess").onclick = async () => {
+// Reload the Auth record independently of the ledger. A transient network failure
+// must not turn into a revocation or interrupt an in-progress edit.
+async function validateIdentity(user, expected, initial) {
   try {
-    const user = auth.currentUser;
     await user.reload();
-    await user.getIdToken(true);
-    await startAccess(auth.currentUser);
-  } catch (error) { message(error.code || error.message); }
-};
+    if (sessionIdentity !== expected || auth.currentUser?.uid !== expected.uid) return false;
+    const idToken = await user.getIdTokenResult(true);
+    if (sessionIdentity !== expected || auth.currentUser?.uid !== expected.uid) return false;
+    if (emailOf(user) !== expected.email || idToken.claims.sub !== expected.uid
+        || String(idToken.claims.email || "").trim().toLowerCase() !== expected.email
+        || (expected.verified && !user.emailVerified)
+        || (user.emailVerified && idToken.claims.email_verified !== true)) {
+      deny("permission-denied");
+      return false;
+    }
+    return true;
+  } catch (error) {
+    if (sessionIdentity !== expected) return false;
+    if (["auth/user-disabled", "auth/user-not-found", "auth/user-token-expired",
+      "auth/invalid-user-token"].includes(error.code)) {
+      deny("permission-denied");
+    } else if (initial) {
+      retryAccess = true;
+      message(cacheNotice());
+    }
+    return false;
+  }
+}
+
+async function auditBoundGrants() {
+  if (!revocationUrl || !adminMode || invitationsStatus !== "ready" || auditingGrants
+      || !navigator.onLine || document.hidden || Date.now() - lastGrantAudit < 300000) return;
+  const user = auth.currentUser;
+  const epoch = identity;
+  if (!user) return;
+  auditingGrants = true;
+  lastGrantAudit = Date.now();
+  try {
+    const token = await user.getIdToken();
+    for (const [address, approval] of [...invitations]) {
+      if (epoch !== identity) return;
+      if (!activeApproval(approval) || !approval.accountUid) continue;
+      const email = address.trim().toLowerCase();
+      const aliases = [...new Set([email, address, ...[...legacyAccess.keys()].filter(id => id.trim().toLowerCase() === email)])];
+      const response = await fetch(revocationUrl + "/reconcile-access", {
+        method:"POST", redirect:"error",
+        headers:{Authorization:"Bearer " + token, "Content-Type":"application/json"},
+        body:JSON.stringify({email, addresses:aliases})
+      });
+      if (!response.ok) throw Error("Access reconciliation returned " + response.status);
+    }
+  } catch (error) {
+    console.warn("Could not reconcile account approvals.", error.message);
+  } finally {
+    auditingGrants = false;
+  }
+}
+
+async function requestVerifiedSignIn() {
+  await auth.signOut();
+  byId("authFeedback").textContent = t("Email verified. Sign in to open your account.", "تم تأكيد البريد. سجّل الدخول لفتح حسابك.");
+}
+async function checkSession(manual = false) {
+  const expected = sessionIdentity;
+  const user = auth.currentUser;
+  if (!user || !expected || !navigator.onLine || checkingSession === expected) return;
+  checkingSession = expected;
+  try {
+    if (retryAccess || (manual && !session && !ready)) {
+      await startAccess(user);
+      return;
+    }
+    if (!await validateIdentity(user, expected, false) || sessionIdentity !== expected) return;
+    if (user.emailVerified !== expected.verified) {
+      await requestVerifiedSignIn();
+      return;
+    }
+    workspace.inert = false;
+    if (manual && ready && !session) await refreshView();
+    void auditBoundGrants();
+  } finally {
+    if (checkingSession === expected) checkingSession = null;
+  }
+}
+byId("checkAccess").onclick = () => checkSession(true);
 byId("verify").onclick = async () => {
   const user = auth.currentUser;
   const button = byId("verify");
@@ -680,6 +793,7 @@ function openAccessPanel(mode) {
   byId("adminMessage").textContent = "";
   renderPanel();
   byId("adminPanel").showModal();
+  if (mode === "list") void auditBoundGrants();
 }
 byId("share").onclick = () => openAccessPanel("grant");
 byId("authorized").onclick = () => openAccessPanel("list");
@@ -714,7 +828,7 @@ byId("inviteOwner").onsubmit = async event => {
       if (!current) {
         tx.set(ref, {pendingStoreId: id, approved: true});
       } else if (!activeApproval(current)) {
-        tx.update(ref, {approved: true, revoked: false, accountUid: firebase.firestore.FieldValue.delete()});
+        tx.update(ref, {approved: true, revoked: false, accountUid: firebase.firestore.FieldValue.delete(), accountConfirmed: firebase.firestore.FieldValue.delete(), profileEstablished: firebase.firestore.FieldValue.delete()});
       } else {
         throw Error(t("This email already has an active invitation.", "لهذا البريد دعوة مفعّلة بالفعل."));
       }
@@ -792,7 +906,10 @@ byId("nameForm").onsubmit = async event => {
   const token = identity;
   const ok = await adminAction(async () => {
     const name = readName("userName");
-    await profileRef(user).set({name});
+    const batch = db.batch();
+    batch.set(profileRef(user), {name}, {merge:true});
+    if (!adminMode) batch.update(inviteRef(emailOf(user)), {profileEstablished:true});
+    await batch.commit();
     if (token === identity) {
       profileName = name;
       byId("profileName").textContent = name;
@@ -804,10 +921,19 @@ byId("nameForm").onsubmit = async event => {
   }
 };
 window.addEventListener("offline", () => {
-  if (auth?.currentUser) deny(cacheNotice());
+  if (auth?.currentUser) workspace.inert = true;
 });
 window.addEventListener("online", () => {
-  if (auth?.currentUser) void startAccess(auth.currentUser);
+  void checkSession();
+});
+
+document.addEventListener("visibilitychange", () => { if (!document.hidden) void checkSession(); });
+setInterval(() => { if (!document.hidden) void checkSession(); }, 60000);
+
+document.addEventListener("tracker-email-link-finished", () => {
+  if (!emailLinkPending) return;
+  emailLinkPending = false;
+  void startAccess(auth.currentUser);
 });
 
 try { init(); } catch (error) { message("تعذّر بدء التطبيق. " + error.message); }
