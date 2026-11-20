@@ -310,7 +310,6 @@ function renderPanel() {
   byId("grantTitle").hidden = showList;
   byId("authorizedTitle").hidden = !showList;
   byId("adminPanel").setAttribute("aria-labelledby", showList ? "authorizedTitle" : "grantTitle");
-  byId("copyAccessLink").hidden = showList;
   byId("inviteOwner").hidden = showList;
   byId("invitationList").hidden = false;
   byId("invitationListTitle").textContent = showList
@@ -345,8 +344,8 @@ function renderPanel() {
   }
 
   const labels = {
-    pending: t("Pending", "بانتظار القبول"),
-    accepted: t("Accepted", "مقبولة"),
+    pending: t("Pending", "قيد الانتظار"),
+    active: t("Active", "مُفعّل"),
     needsApproval: t("Needs approval", "تحتاج موافقة"),
     legacy: t("Previous access", "صلاحية سابقة"),
     revoked: t("Revoked", "ملغاة")
@@ -357,7 +356,7 @@ function renderPanel() {
     if (approval.revoked === true) state = "revoked";
     else if (approval.legacy) state = "legacy";
     else if (!activeApproval(approval)) state = "needsApproval";
-    else if (approval.accountConfirmed && approval.accountUid) state = "accepted";
+    else if (approval.accountConfirmed && approval.accountUid) state = "active";
     const row = document.createElement("li");
     row.className = "invitation-row";
     row.dataset.state = state;
@@ -370,7 +369,9 @@ function renderPanel() {
     status.textContent = labels[state];
     const account = document.createElement("small");
     account.className = "invitation-account";
-    account.textContent = approval.accountConfirmed === true && approval.accountUid
+    account.textContent = state === "active" ? t("Account active and verified", "الحساب مُفعّل وجاهز للاستخدام")
+      : state === "pending" ? t("Awaiting user sign-in", "بانتظار إكمال المستخدم للتسجيل")
+      : approval.accountConfirmed === true && approval.accountUid
       ? t("Verified sign-in recorded", "سبق تأكيد الدخول")
       : t("No verified sign-in recorded", "لا يوجد دخول مؤكّد حتى الآن");
     details.append(address, status, account);
@@ -797,15 +798,6 @@ function openAccessPanel(mode) {
 }
 byId("share").onclick = () => openAccessPanel("grant");
 byId("authorized").onclick = () => openAccessPanel("list");
-byId("copyAccessLink").onclick = async () => {
-  const url = new URL("./",location.href).href;
-  try {
-    await navigator.clipboard.writeText(url);
-    byId("adminMessage").textContent = t("Link copied.","تم نسخ الرابط.");
-  } catch {
-    byId("adminMessage").textContent = url;
-  }
-};
 byId("closePanel").onclick = () => byId("adminPanel").close();
 byId("activeBranch").onchange = event => selectStore(event.target.value);
 document.addEventListener("tracker-language", () => {
@@ -835,8 +827,7 @@ byId("inviteOwner").onsubmit = async event => {
     });
   }, event.currentTarget);
   if (saved) {
-    byId("adminMessage").textContent = t("Invitation saved. Copy the app link to share it.",
-      "تم حفظ الدعوة. انسخ رابط التطبيق لمشاركته مع المدعو.");
+    byId("adminMessage").textContent = t("Invitation approved.", "تمت الموافقة على الدعوة.");
   }
 };
 byId("useInvite").onclick = () => {

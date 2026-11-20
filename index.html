@@ -234,7 +234,7 @@
       font-size: .8rem;
       font-weight: 600;
     }
-    .invitation-row[data-state="accepted"] .invitation-status { background: #dcefe4; color: #245d43; }
+    .invitation-row[data-state="active"] .invitation-status { background: #dcefe4; color: #245d43; }
     .invitation-row[data-state="revoked"] .invitation-status { background: #e9eeeb; color: #4b5d55; }
     .invitation-row[data-state="legacy"] .invitation-status { background: #e9eef4; color: #36516b; }
     #adminPanel button[data-revoke] { border-color: #ead0cc; color: #8a3328; font-size: .875rem; }
@@ -343,7 +343,7 @@
           <label><span data-ar="البريد الإلكتروني للمدعو">Invitee’s email address</span>
             <input id="ownerEmail" type="email" dir="ltr" aria-describedby="inviteHelp" autocomplete="off" maxlength="254" required>
           </label>
-          <p id="inviteHelp" data-ar="بعد الموافقة، شارك رابط التطبيق مع المدعو ليدخل ببريده ويدير محله.">After approval, share the app link so the invitee can sign in and manage their store.</p>
+          <p id="inviteHelp" data-ar="بعد الموافقة، يمكن للمدعو تسجيل الدخول مباشرةً باستخدام بريده الإلكتروني الموثّق.">After approval, the invitee can sign in directly using their verified email address.</p>
           <button class="access-primary" data-ar="تأكيد الدعوة">Approve invitation</button>
         </form>
         <section id="invitationList" aria-labelledby="invitationListTitle" hidden>
@@ -355,7 +355,6 @@
 
       <p role="status" id="adminMessage"></p>
       <div class="access-footer">
-        <button type="button" id="copyAccessLink" data-ar="نسخ رابط التطبيق">Copy app link</button>
         <button type="button" id="closePanel" data-ar="إغلاق">Close</button>
       </div>
     </dialog>

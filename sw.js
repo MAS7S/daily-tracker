@@ -1,4 +1,4 @@
-const VERSION = "2026-11-20.ledger-access.1";
+const VERSION = "2026-11-20.ledger-access.2";
 const SCOPE = self.registration.scope;
 const PREFIX = "daily-tracker/" + SCOPE + "/";
 const CACHE = PREFIX + VERSION;
