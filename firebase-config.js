@@ -7,3 +7,5 @@ window.firebaseConfig = {
   appId: "1:1071741399751:web:3cdf206c860a8dcdb1c4e2",
   measurementId: "G-EFMQ7NJ9K9"
 };
+
+window.dailyTrackerGoogleClientId = "1071741399751-uggrq24iutvbkurkkveh43vsi72kaji6.apps.googleusercontent.com";
