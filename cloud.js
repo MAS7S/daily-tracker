@@ -231,6 +231,8 @@ function init() {
   auth.onAuthStateChanged(startAccess);
 
 }
+const pendingDeletions = new Set();
+const revocationUrl = window.dailyTrackerRevocationUrl;
 const ADMIN = "malekshahbien@gmail.com";
 const emailOf = user => (user?.email || "").trim().toLowerCase();
 const accessRef = email => db.collection("access").doc(email);
@@ -310,6 +312,7 @@ function renderPanel() {
     if (email.toLowerCase() !== ADMIN) entries.set(email, approval);
   }
 
+  for (const email of pendingDeletions) entries.set(email, { deletionPending: true });
   const statuses = [invitationsStatus, legacyAccessStatus];
   const incomplete = statuses.includes("failed");
   if (incomplete || !entries.size) {
@@ -357,11 +360,11 @@ function renderPanel() {
 
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = t("Revoke access", "إلغاء الوصول");
+    button.textContent = approval.deletionPending ? t("Finish account deletion", "إكمال حذف الحساب") : t("Revoke access", "إلغاء الوصول");
     button.setAttribute("aria-label", t("Revoke access for ", "إلغاء الوصول لـ ") + email);
     button.setAttribute("data-revoke", "");
     button.onclick = async () => {
-      if (button.disabled || !window.confirm(t("Revoke access for ", "إلغاء الوصول لـ ") + email + "?")) return;
+      if (button.disabled || !window.confirm((revocationUrl ? t("Revoke access and permanently delete the sign-in account for ", "إلغاء الوصول وحذف حساب تسجيل الدخول نهائيًا لـ ") : t("Revoke access for ", "إلغاء الوصول لـ ")) + email + "?")) return;
       button.disabled = true;
       try {
         if (await adminAction(() => revokeEmailAccess(email))) {
@@ -543,6 +546,11 @@ async function startAccess(user) {
   try {
     if (adminMode) {
       watchOwned();
+      if (revocationUrl) listeners.push(listen(db.collection("accessRevocations"), snap => {
+        pendingDeletions.clear();
+        snap.forEach(doc => pendingDeletions.add(doc.id));
+        renderPanel();
+      }, error => console.error("Could not load pending account deletions", error.code)));
       listeners.push(listen(db.collection("ownerInvites"), snap => {
         invitations.clear();
         snap.forEach(doc => invitations.set(doc.id, doc.data()));
@@ -631,6 +639,16 @@ async function revokeEmailAccess(address) {
   const addresses = new Set([email, address]);
   for (const id of [...invitations.keys(), ...legacyAccess.keys()]) {
     if (id.trim().toLowerCase() === email) addresses.add(id);
+  }
+  if (revocationUrl) {
+    const token = await auth.currentUser.getIdToken(true);
+    const response = await fetch(revocationUrl + "/revoke", {
+      method: "POST", redirect: "error",
+      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({email, addresses: [...addresses]})
+    });
+    if (!response.ok) throw Error(t("Account deletion could not be confirmed. Try again.", "تعذّر تأكيد حذف الحساب. أعد المحاولة."));
+    return;
   }
   const batch = db.batch();
   for (const id of addresses) {

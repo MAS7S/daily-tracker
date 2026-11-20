@@ -1,0 +1,9 @@
+name = "daily-tracker-revoke"
+main = "index.mjs"
+compatibility_date = "2025-11-01"
+workers_dev = true
+
+[vars]
+FIREBASE_PROJECT_ID = "daily-income-tracking"
+FIREBASE_API_KEY = "AIzaSyCB347V06ZNqCqwUMhhmulm05Q7aagxzHE"
+ALLOWED_ORIGIN = "https://mas7s.github.io"

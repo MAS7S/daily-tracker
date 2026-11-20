@@ -107,18 +107,24 @@ service cloud.firestore {
         && !('accountUid' in get(invitePath(address)).data);
     }
 
+    function deletionPending(address) {
+      return exists(/databases/$(database)/documents/accessRevocations/$(address.lower()));
+    }
+    match /accessRevocations/{address} {
+      allow get, list: if admin();
+    }
     match /ownerInvites/{address} {
       allow get: if admin() || (verified() && email() == address);
       allow list: if admin();
       allow delete: if admin() && address.lower() != email();
-      allow create: if admin()
+      allow create: if admin() && !deletionPending(address)
         && validInvitation(request.resource.data)
         && request.resource.data.pendingStoreId.size() == 20
         && approvalIsActive(request.resource.data)
         && !request.resource.data.keys().hasAny(['accountConfirmed', 'accountUid'])
         && address.size() <= 254 && address.matches('[^@/]+@[^@/]+')
         && address == address.lower() && address != email();
-      allow update: if validInvitation(request.resource.data)
+      allow update: if !deletionPending(address) && validInvitation(request.resource.data)
         && (managesApproval(address)
           || createsApprovedStore(address)
           || claimsOwnApproval(address));
