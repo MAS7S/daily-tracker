@@ -538,14 +538,36 @@
       el("authForm").onsubmit = event => {
         event.preventDefault();
 
-        const method = event.submitter?.id === "create"
-          ? "createUserWithEmailAndPassword"
-          : "signInWithEmailAndPassword";
+        const address = el("email").value.trim().toLowerCase();
+        const password = el("password").value;
+        if (event.submitter?.id !== "create") {
+          run(() => authClient.signInWithEmailAndPassword(address,password));
+          return;
+        }
 
-        run(() => authClient[method](
-          el("email").value.trim(),
-          el("password").value
-        ));
+        run(async () => {
+          const denySignup = () => show(
+            "This email has not been granted access by the owner.",
+            "هذا البريد غير مصرّح له من قبل المالك."
+          );
+          if (!address || address.includes("/") || address.length > 254) {
+            denySignup();
+            return;
+          }
+          try {
+            await firebase.firestore().collection("signupChecks").doc(address).get({source:"server"});
+          } catch (error) {
+            if (error.code !== "permission-denied") throw error;
+            denySignup();
+            return;
+          }
+          if (authClient.currentUser) return;
+          authClient.languageCode = language;
+          const {user} = await authClient.createUserWithEmailAndPassword(address,password);
+          await user.sendEmailVerification();
+          show("Verification email sent. Open the link, then select Check access.",
+            "تم إرسال رابط التأكيد. افتحه ثم اضغط تحقق من الوصول.");
+        });
       };
 
       el("forgot").onclick = () => {

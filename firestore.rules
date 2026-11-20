@@ -96,6 +96,17 @@ service cloud.firestore {
           || (!approvalIsActive(before) && after.approved == true && after.revoked == false
             && !('accountUid' in after) && changed.hasOnly(['approved', 'revoked', 'accountUid'])));
     }
+    // This path stores no documents. A permitted point lookup signals active approval
+    // without exposing the private invitation or accepting queries on approved emails.
+    match /signupChecks/{address} {
+      allow get: if request.auth == null
+        && resource == null
+        && address == address.lower() && address.size() <= 254
+        && exists(invitePath(address))
+        && approvalIsActive(get(invitePath(address)).data)
+        && !('accountUid' in get(invitePath(address)).data);
+    }
+
     match /ownerInvites/{address} {
       allow get: if admin() || (verified() && email() == address);
       allow list: if admin();
