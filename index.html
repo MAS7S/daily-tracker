@@ -303,6 +303,7 @@
     </div>
 
     <p role="status" id="message"></p>
+    <div id="draftBackups"></div>
     <p role="alert" id="authFeedback"></p>
     <noscript>Enable JavaScript to use Daily Tracker.</noscript>
   </main>
@@ -541,6 +542,10 @@
 
       async function run(action) {
         if (busy) return;
+        if (!navigator.onLine) {
+          show("Connect to the internet to sign in.", "اتصل بالإنترنت لتسجيل الدخول.");
+          return;
+        }
         busy = true;
         const buttons = [...el("gate").querySelectorAll("button")]
           .filter(button => button.id !== "language");

@@ -257,7 +257,7 @@ export default {
     if (origin === env.ALLOWED_ORIGIN) headers['Access-Control-Allow-Origin'] = origin;
     const respond = (value, status) => Response.json(value, { status, headers });
     const path = new URL(request.url).pathname;
-    if (!['/revoke','/revoke-confirmed','/reconcile-access'].includes(path)) return respond({ code: 'not-found' }, 404);
+    if (!['/revoke-confirmed','/reconcile-access'].includes(path)) return respond({ code: 'not-found' }, 404);
     if (!origin || origin !== env.ALLOWED_ORIGIN) return respond({ code: 'origin-denied' }, 403);
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: {

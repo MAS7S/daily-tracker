@@ -1,7 +1,6 @@
-const VERSION = "2026-11-20.ledger-access.2";
 const SCOPE = self.registration.scope;
 const PREFIX = "daily-tracker/" + SCOPE + "/";
-const CACHE = PREFIX + VERSION;
+const CACHE = PREFIX + "core";
 
 const files = [
   "index.html",
@@ -30,6 +29,7 @@ self.addEventListener("install", event => {
     }));
 
     await cache.addAll(requests);
+    await self.skipWaiting();
   })());
 });
 
@@ -59,9 +59,27 @@ self.addEventListener("fetch", event => {
 
   if (!urls.has(key)) return;
 
-  event.respondWith((async () => {
-    const cache = await caches.open(CACHE);
-    const cached = await cache.match(key);
-    return cached || fetch(request);
-  })());
+  event.respondWith(networkFirst(key));
 });
+
+async function networkFirst(key) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4000);
+  let response;
+  try {
+    response = await fetch(key, {cache: "no-store", signal: controller.signal});
+    if (!response.ok) throw Error("Asset unavailable");
+    // Read the body before the deadline so a stalled transfer also falls back.
+    await response.clone().arrayBuffer();
+  } catch (error) {
+    const cached = await caches.match(key, {cacheName: CACHE});
+    if (cached) return cached;
+    if (response && !response.ok) return response;
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+  try { await (await caches.open(CACHE)).put(key, response.clone()); }
+  catch { /* Storage may be full; the network response is still usable. */ }
+  return response;
+}

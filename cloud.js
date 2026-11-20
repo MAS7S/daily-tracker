@@ -40,6 +40,19 @@ function schedule(s, delay = 500) {
   clearTimeout(s.timer);
   s.timer = setTimeout(() => reconcile(s), delay);
 }
+function listenForUpdates(ref, onData, onError) {
+  let stop, timer, closed = false;
+  function subscribe() {
+    stop = ref.onSnapshot({includeMetadataChanges:true}, onData, error => {
+      if (closed) return;
+      if (["unavailable", "deadline-exceeded"].includes(error.code)) {
+        timer = setTimeout(subscribe, 3000);
+      } else onError(error);
+    });
+  }
+  subscribe();
+  return () => { closed = true; clearTimeout(timer); stop(); };
+}
 function openLedger(s) {
   if (s !== session) return;
   if (s.open) {
@@ -56,7 +69,7 @@ function openLedger(s) {
       const copy = JSON.parse(JSON.stringify(value));
       if (JSON.stringify(copy) === JSON.stringify(s.record.value)) return;
       setState(s, {...s.record, value:copy, dirty:true});
-      statusText("حُفظ على الجهاز • بانتظار المزامنة");
+      statusText(!navigator.onLine || s.needsAccessCheck ? pendingSync() : "حُفظ على الجهاز • بانتظار المزامنة");
       schedule(s);
     }
   };
@@ -136,12 +149,16 @@ function showConflict(s, head, remote) {
 }
 async function reconcile(s) {
   if (s !== session || s.conflict) return;
+  if (!navigator.onLine || s.needsAccessCheck) {
+    if (!s.storageError) statusText(pendingSync());
+    return;
+  }
   if (s.busy) { s.again = true; return; }
   s.busy = true;
   try {
     if (s.storageError) persist(s);
     const snap = await s.ref.get({source:"server"});
-    if (s !== session) return;
+    if (s !== session || s.needsAccessCheck) return;
     const head = snap.exists ? snap.data() : {revision:null,parts:0};
     if (snap.exists && (typeof head.revision !== "string" || !head.revision ||
         !Number.isInteger(head.parts) || head.parts < 1 || head.parts > 160)) throw Error("invalid-ledger");
@@ -170,7 +187,7 @@ async function reconcile(s) {
     else if (error.message === "invalid-ledger" || error instanceof SyntaxError) statusText(t("Could not read the saved ledger. Check its backup before editing.", "تعذّرت قراءة الدفتر المحفوظ. راجع نسخته الاحتياطية قبل التعديل."));
     else if (error.message === "ledger-too-large") statusText("تجاوز الدفتر حد المزامنة. صدّر نسخة احتياطية قبل تقليل حجمه.");
     else {
-      statusText(s.open ? "بانتظار الاتصال للمزامنة • النسخة على الجهاز" : "يلزم الاتصال لتحميل الدفتر أول مرة. " + (error.code || ""));
+      statusText(s.open ? pendingSync() : cacheNotice());
       schedule(s, 12000);
     }
   } finally {
@@ -191,9 +208,17 @@ async function enter(user, branchId, ticket) {
     gate.hidden = true; workspace.hidden = false;
     byId("emailDisplay").textContent = user.email;
     statusText("جارٍ فتح دفتر الفرع…");
-    const unsubscribe = s.ref.onSnapshot({includeMetadataChanges:true}, snap => {
+    const unsubscribe = listenForUpdates(s.ref, snap => {
       if (s !== session) return;
-      if (!snap.metadata.fromCache && !snap.metadata.hasPendingWrites) schedule(s);
+      if (snap.metadata.fromCache) {
+        if (s.open) {
+          s.needsAccessCheck = true;
+          if (!s.storageError && !s.conflict) statusText(pendingSync());
+        }
+      } else if (!snap.metadata.hasPendingWrites) {
+        if (s.needsAccessCheck) void checkSession();
+        else schedule(s);
+      }
     }, error => { if (s === session) deny(error.code); });
     schedule(s,0);
     await new Promise(resolve => { s.release = resolve; });
@@ -201,8 +226,7 @@ async function enter(user, branchId, ticket) {
   });
 }
 
-byId("retry").onclick = () => session && schedule(session,0);
-window.addEventListener("online", byId("retry").onclick);
+byId("retry").onclick = () => session?.needsAccessCheck ? checkSession() : session && schedule(session,0);
 window.addEventListener("beforeunload", e => {
   if (session?.storageError) { e.preventDefault(); e.returnValue = ""; }
 });
@@ -247,6 +271,7 @@ const inviteRef = email => db.collection("ownerInvites").doc(email);
 const profileRef = user => db.collection("profiles").doc(user.uid);
 const t = (en, ar) => document.documentElement.lang === "ar" ? ar : en;
 const cacheNotice = () => t("Connect to verify store access.", "اتصل بالإنترنت للتحقق من صلاحية الفرع.");
+const pendingSync = () => t("Waiting for connection to sync", "بانتظار الاتصال للمزامنة");
 let emailLinkPending = false;
 let generation = 0, identity = 0, wanted = "";
 let listeners = [];
@@ -269,7 +294,37 @@ function closeLedger() {
   gate.hidden = false;
   byId("choices").hidden = true;
 }
+function backupRevokedDrafts(user, ledger) {
+  const ledgerPrefix = prefix + user.uid + ":store:";
+  const keys = new Set();
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(ledgerPrefix)) keys.add(key);
+  }
+  if (ledger?.key.startsWith(ledgerPrefix)) keys.add(ledger.key);
+  const links = byId("draftBackups");
+  for (const key of keys) {
+    const raw = localStorage.getItem(key);
+    let record;
+    try { record = key === ledger?.key ? ledger.record : JSON.parse(raw); }
+    catch { /* Preserve an unreadable draft verbatim for recovery. */ }
+    if (record?.dirty || (!record && raw)) {
+      const store = key.slice(ledgerPrefix.length);
+      const content = record?.value ? JSON.stringify({
+        ...record.value, app:"daily-income-expense-tracker", version:3, exported:new Date().toISOString()
+      }, null, 2) : raw;
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([content], {type:"application/json"}));
+      link.download = keys.size === 1 ? "daily-tracker-unsynced.json" : "daily-tracker-unsynced-" + store + ".json";
+      link.textContent = t("Download unsynced backup", "تنزيل نسخة التغييرات غير المتزامنة") + " (" + store + ")";
+      links.append(link, document.createElement("br"));
+      try { link.click(); } catch { /* The link remains available for a manual download. */ }
+    }
+    localStorage.removeItem(key);
+  }
+}
 function deny(reason) {
+  const ledger = session;
   closeLedger();
   for (const id of ["adminPanel", "nameDialog", "storeNameDialog", "createDialog"]) byId(id).close();
   const user = auth?.currentUser;
@@ -285,11 +340,7 @@ function deny(reason) {
   invite = null;
   profileName = "";
   try {
-    const ledgerPrefix = prefix + user.uid + ":store:";
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(ledgerPrefix)) localStorage.removeItem(key);
-    }
+    backupRevokedDrafts(user, ledger);
     sessionStorage.removeItem(prefix + emailOf(user) + ":store");
   } catch (error) {
     console.warn("Could not clear the signed-out account cache.", error.name);
@@ -520,10 +571,14 @@ async function startAccess(user) {
     byId("password").value = "";
     delete byId("verify").dataset.sentFor;
     if (accessRevoked) showRevokedMessage();
-    else message("");
+    else message(navigator.onLine ? "" : cacheNotice());
     return;
   }
   accessRevoked = false;
+  const backups = byId("draftBackups");
+  for (const link of backups.querySelectorAll("a")) URL.revokeObjectURL(link.href);
+  backups.replaceChildren();
+  if (!navigator.onLine) { retryAccess = true; message(cacheNotice()); return; }
   const current = () => identity === token && auth.currentUser?.uid === user.uid;
   const snapshotIdentity = sessionIdentity;
   if (!await validateIdentity(user, snapshotIdentity, true) || !current()) return;
@@ -537,7 +592,7 @@ async function startAccess(user) {
   message("");
   const fail = error => { if (current()) deny(error.code || error.message); };
   const listen = (ref, apply, onError = fail) => {
-    return ref.onSnapshot({includeMetadataChanges: true}, snap => {
+    return listenForUpdates(ref, snap => {
       if (!current() || snap.metadata.hasPendingWrites) return;
       if (snap.metadata.fromCache) return;
       apply(snap);
@@ -767,7 +822,26 @@ async function checkSession(manual = false) {
       await requestVerifiedSignIn();
       return;
     }
-    workspace.inert = false;
+    const ledger = session;
+    if (ledger?.needsAccessCheck) {
+      try {
+        if (!adminMode) {
+          const approval = (await inviteRef(expected.email).get({source:"server"})).data();
+          if (session !== ledger || sessionIdentity !== expected) return;
+          if (!activeApproval(approval) || approval.accountUid !== user.uid || approval.accountConfirmed !== true) {
+            deny("permission-denied"); return;
+          }
+        }
+        // This server read also checks store ownership and ledger permissions.
+        await ledger.ref.get({source:"server"});
+        if (session !== ledger || sessionIdentity !== expected || !navigator.onLine) return;
+        ledger.needsAccessCheck = false;
+        schedule(ledger, 0);
+      } catch (error) {
+        if (session === ledger && error.code === "permission-denied") deny(error.code);
+        return;
+      }
+    }
     if (manual && ready && !session) await refreshView();
     void auditBoundGrants();
   } finally {
@@ -912,7 +986,10 @@ byId("nameForm").onsubmit = async event => {
   }
 };
 window.addEventListener("offline", () => {
-  if (auth?.currentUser) workspace.inert = true;
+  if (session) {
+    session.needsAccessCheck = true;
+    if (!session.storageError && !session.conflict) statusText(pendingSync());
+  } else message(cacheNotice());
 });
 window.addEventListener("online", () => {
   void checkSession();
