@@ -181,8 +181,9 @@ async function revoke(api, owner, email, addresses) {
       await api.deleteUser(uid);
     }
   }
+  if (await api.findUser({ email: [email] })) throw new RequestError(409, 'account-still-present');
   await api.commit([{ delete: pendingName, currentDocument: { updateTime: pending.updateTime } }]);
-  return { accountDeleted: Boolean(uid) };
+  return { accountDeleted: Boolean(uid), accountAbsent: true };
 }
 
 export default {
@@ -191,7 +192,7 @@ export default {
     const headers = { 'Cache-Control': 'no-store', Vary: 'Origin' };
     if (origin === env.ALLOWED_ORIGIN) headers['Access-Control-Allow-Origin'] = origin;
     const respond = (value, status) => Response.json(value, { status, headers });
-    if (new URL(request.url).pathname !== '/revoke') return respond({ code: 'not-found' }, 404);
+    if (!['/revoke','/revoke-confirmed'].includes(new URL(request.url).pathname)) return respond({ code: 'not-found' }, 404);
     if (!origin || origin !== env.ALLOWED_ORIGIN) return respond({ code: 'origin-denied' }, 403);
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: {

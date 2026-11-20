@@ -1,4 +1,4 @@
-const VERSION = "2026-11-20.account-revocation.1";
+const VERSION = "2026-11-20.confirmed-revocation.1";
 const SCOPE = self.registration.scope;
 const PREFIX = "daily-tracker/" + SCOPE + "/";
 const CACHE = PREFIX + VERSION;

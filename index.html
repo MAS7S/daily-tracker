@@ -150,6 +150,7 @@
     #gate button:focus-visible,#gate input:focus-visible{outline:2px solid #076747;outline-offset:2px}
     .password-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0 12px;margin-top:6px}
     .password-row label{margin:0}
+    #gate button[hidden], #googleIdentity[hidden]{display:none!important}
     #gate #forgot{width:auto;min-height:40px;margin:0;padding:4px 0;border:0;background:transparent;color:#076747;font-size:.86rem;font-weight:600;text-decoration:underline;text-underline-offset:3px}
     #gate :is(#login,#create){min-height:44px;font-weight:650}
     #gate #login{margin-top:16px;background:#076747;border-color:#076747;color:white}
@@ -266,7 +267,7 @@
 <body>
   <main id="gate">
     <div class="login-heading"><strong>Daily Tracker</strong><button id="language" type="button">العربية</button></div>
-    <h1 data-ar="تسجيل الدخول">Sign in</h1>
+    <h1 id="authTitle" data-ar="تسجيل الدخول">Sign in</h1>
 
     <button id="google" type="button">
       <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
@@ -278,6 +279,7 @@
       <span data-ar="تسجيل الدخول باستخدام Google">Sign in with Google</span>
     </button>
 
+    <div id="googleIdentity"></div>
     <form id="authForm">
       <label for="email" data-ar="البريد الإلكتروني">Email</label>
       <input id="email" type="email" dir="ltr" autocomplete="username" required>
@@ -290,7 +292,8 @@
              autocomplete="current-password" required>
 
       <button id="login" type="submit" data-ar="تسجيل الدخول">Sign in</button>
-      <button id="create" type="submit" data-ar="إنشاء حساب">Create account</button>
+      <button id="create" type="button" data-ar="إنشاء حساب">Create account</button>
+      <button id="backToSignin" type="button" data-ar="العودة لتسجيل الدخول" hidden>Back to sign in</button>
     </form>
 
     <div id="accountActions" hidden>
@@ -439,6 +442,8 @@
         }
       }
 
+      let creating = false;
+      let busy = false;
       let feedback = ["", ""];
 
       function show(english, arabic) {
@@ -454,6 +459,11 @@
           node.textContent = node.dataset[language];
         });
 
+        el("authTitle").textContent = creating ? choose("Create account", "إنشاء حساب") : choose("Sign in", "تسجيل الدخول");
+        el("login").textContent = el("authTitle").textContent;
+        el("forgot").hidden = el("create").hidden = creating;
+        el("backToSignin").hidden = !creating;
+        el("password").autocomplete = creating ? "new-password" : "current-password";
         el("language").textContent = choose("العربية", "English");
         el("workspaceLanguage").querySelector("span").textContent = el("language").textContent;
         el("authFeedback").textContent = choose(...feedback);
@@ -516,6 +526,8 @@
       }
 
       async function run(action) {
+        if (busy) return;
+        busy = true;
         const buttons = [...el("gate").querySelectorAll("button")]
           .filter(button => button.id !== "language");
 
@@ -529,45 +541,88 @@
           report(error);
         } finally {
           buttons.forEach(button => { button.disabled = false; });
+          busy = false;
         }
       }
 
-      el("google").onclick = () => run(() =>
-        authClient.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+      async function approved(address) {
+        if (/^[^@/\s]+@[^@/\s]+\.[^@/\s]+$/.test(address) && address.length <= 254) {
+          try {
+            await firebase.firestore().collection("signupChecks").doc(address).get({source:"server"});
+            return true;
+          } catch (error) {
+            if (error.code !== "permission-denied") {
+              show("Could not check email authorization. Try again.", "تعذّر التحقق من صلاحية البريد. أعد المحاولة.");
+              return false;
+            }
+          }
+        }
+        show("This email has not been granted access by the owner.", "هذا البريد غير مصرّح له من قبل المالك.");
+        return false;
+      }
+
+      function setCreating(value) {
+        creating = value;
+        show("", "");
+        paint();
+        el("email").focus();
+      }
+      el("create").onclick = () => setCreating(true);
+      el("backToSignin").onclick = () => setCreating(false);
+
+      // Use the exact Google credential checked below when authenticating with Firebase.
+      const googleClientId = window.dailyTrackerGoogleClientId;
+      el("google").onclick = () => show(
+        "Google sign-in is unavailable. Continue with email and password.",
+        "تسجيل الدخول باستخدام Google غير متاح حاليًا. تابع بالبريد وكلمة المرور."
       );
+      if (googleClientId) {
+        const script = document.createElement("script");
+        script.src = "https://accounts.google.com/gsi/client";
+        script.async = true;
+        script.onload = () => {
+          google.accounts.id.initialize({
+            client_id: googleClientId,
+            callback: ({credential}) => run(async () => {
+              if (authClient.currentUser || !credential) return;
+              const encoded = credential.split(".")[1].replaceAll("-", "+").replaceAll("_", "/");
+              const claims = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded), c => c.charCodeAt(0))));
+              const address = String(claims.email || "").trim().toLowerCase();
+              if (!await approved(claims.email_verified === true ? address : "")) return;
+              if (!authClient.currentUser) {
+                await authClient.signInWithCredential(firebase.auth.GoogleAuthProvider.credential(credential));
+              }
+            })
+          });
+          google.accounts.id.renderButton(el("googleIdentity"), {theme:"outline", size:"large"});
+          el("google").style.display = "none";
+        };
+        document.head.append(script);
+      }
 
       el("authForm").onsubmit = event => {
         event.preventDefault();
-
         const address = el("email").value.trim().toLowerCase();
         const password = el("password").value;
-        if (event.submitter?.id !== "create") {
+        if (!creating) {
           run(() => authClient.signInWithEmailAndPassword(address,password));
           return;
         }
 
         run(async () => {
-          const denySignup = () => show(
-            "This email has not been granted access by the owner.",
-            "هذا البريد غير مصرّح له من قبل المالك."
-          );
-          if (!address || address.includes("/") || address.length > 254) {
-            denySignup();
-            return;
-          }
-          try {
-            await firebase.firestore().collection("signupChecks").doc(address).get({source:"server"});
-          } catch (error) {
-            if (error.code !== "permission-denied") throw error;
-            denySignup();
-            return;
-          }
-          if (authClient.currentUser) return;
+          if (!await approved(address) || authClient.currentUser) return;
           authClient.languageCode = language;
           const {user} = await authClient.createUserWithEmailAndPassword(address,password);
-          await user.sendEmailVerification();
-          show("Verification email sent. Open the link, then select Check access.",
-            "تم إرسال رابط التأكيد. افتحه ثم اضغط تحقق من الوصول.");
+          const verify = el("verify");
+          verify.disabled = true;
+          try {
+            await user.sendEmailVerification();
+            verify.dataset.sentFor = user.uid;
+            show("Verification link sent. Open it, then select Check access.",
+              "تم إرسال رابط التحقق. افتحه ثم اضغط تحقق من الوصول.");
+          } finally {
+            verify.disabled = false;
+          }
         });
       };
 

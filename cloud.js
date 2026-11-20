@@ -497,6 +497,7 @@ async function startAccess(user) {
   byId("adminOnly").hidden = !adminMode;
   byId("accountActions").hidden = !user;
   byId("verify").hidden = !user || user.emailVerified;
+  byId("googleIdentity").hidden = !!user;
   byId("authForm").hidden = byId("google").hidden = byId("forgot").hidden = !!user;
   if (!user) {
     if (accessRevoked) showRevokedMessage();
@@ -640,22 +641,17 @@ async function revokeEmailAccess(address) {
   for (const id of [...invitations.keys(), ...legacyAccess.keys()]) {
     if (id.trim().toLowerCase() === email) addresses.add(id);
   }
-  if (revocationUrl) {
-    const token = await auth.currentUser.getIdToken(true);
-    const response = await fetch(revocationUrl + "/revoke", {
-      method: "POST", redirect: "error",
-      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-      body: JSON.stringify({email, addresses: [...addresses]})
-    });
-    if (!response.ok) throw Error(t("Account deletion could not be confirmed. Try again.", "تعذّر تأكيد حذف الحساب. أعد المحاولة."));
-    return;
+  if (!revocationUrl) throw Error(t("Account deletion is unavailable.", "خدمة حذف الحساب غير متاحة."));
+  const token = await auth.currentUser.getIdToken(true);
+  const response = await fetch(revocationUrl + "/revoke-confirmed", {
+    method: "POST", redirect: "error",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({email, addresses: [...addresses]})
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || result?.accountAbsent !== true) {
+    throw Error(t("Account deletion could not be confirmed. Try again.", "تعذّر تأكيد حذف الحساب. أعد المحاولة."));
   }
-  const batch = db.batch();
-  for (const id of addresses) {
-    batch.delete(inviteRef(id));
-    batch.delete(accessRef(id));
-  }
-  await batch.commit();
 }
 byId("checkAccess").onclick = async () => {
   try {
@@ -666,10 +662,16 @@ byId("checkAccess").onclick = async () => {
   } catch (error) { message(error.code || error.message); }
 };
 byId("verify").onclick = async () => {
+  const user = auth.currentUser;
+  const button = byId("verify");
+  if (!user || button.disabled || button.dataset.sentFor === user.uid) return;
+  button.disabled = true;
   try {
-    await auth.currentUser.sendEmailVerification();
+    await user.sendEmailVerification();
+    button.dataset.sentFor = user.uid;
     message("أرسلنا رابط التأكيد إلى بريدك.");
   } catch (error) { message(error.code || error.message); }
+  finally { button.disabled = false; }
 };
 byId("leave").onclick = () => auth.signOut().catch(error => message(error.code));
 function openAccessPanel(mode) {
