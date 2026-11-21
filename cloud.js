@@ -1,29 +1,52 @@
 "use strict";
 const byId = id => document.getElementById(id);
 const gate = byId("gate"), workspace = byId("workspace"), frame = byId("ledger");
-let syncStatus;
-let pendingTimer;
 
-function clearPendingTimer() {
+// Sync indicator. "saved" and "pending" are quiet dot states; text is reserved for real messages.
+// - setSync("pending") never restarts its timer and never overrides a message.
+// - setSync("saved") replaces anything and cancels a pending timer.
+// - statusText(text) shows a real message (errors, conflicts, progress).
+let syncState = "";
+let pendingTimer = null;
+const PENDING_DELAY = 5000;
+
+function resetSync() {
   clearTimeout(pendingTimer);
   pendingTimer = null;
+  syncState = "";
 }
-
+function paintStatus(state, text) {
+  const el = byId("status");
+  if (el.dataset.state !== state) el.dataset.state = state;
+  el.dataset.saved = String(state === "saved");
+  if (el.textContent !== text) el.textContent = text;
+}
 const statusText = value => {
-  clearPendingTimer();
-  const isPendingSync =
-    value === pendingSync() ||
-    value === "Waiting for connection to sync" ||
-    value === "بانتظار الاتصال للمزامنة" ||
-    value === "بانتظار المزامنة…";
-  if (isPendingSync) return;
-  syncStatus = value;
-  const saved = syncStatus === "saved";
-  byId("status").textContent = saved ? t("Saved to cloud", "تمت المزامنة") : value;
-  byId("retry").hidden = !session || saved;
+  clearTimeout(pendingTimer);
+  pendingTimer = null;
+  syncState = "message";
+  paintStatus("message", value);
+  byId("retry").hidden = !session;
 };
-
-function schedulePendingStatus() {}
+function showSync(state) {
+  if (syncState === state) return;
+  syncState = state;
+  paintStatus(state, state === "pending" ? pendingSync() : "");
+  byId("retry").hidden = !session || state === "saved";
+}
+function setSync(state) {
+  if (state === "pending") {
+    if (syncState === "pending" || syncState === "message" || pendingTimer) return;
+    pendingTimer = setTimeout(() => {
+      pendingTimer = null;
+      if (session && syncState !== "message") showSync("pending");
+    }, PENDING_DELAY);
+    return;
+  }
+  clearTimeout(pendingTimer);
+  pendingTimer = null;
+  showSync(state);
+}
 
 const message = value => { byId("message").textContent = value; };
 const config = window.firebaseConfig;
@@ -87,7 +110,7 @@ function openLedger(s) {
       const copy = JSON.parse(JSON.stringify(value));
       if (JSON.stringify(copy) === JSON.stringify(s.record.value)) return;
       setState(s, {...s.record, value:copy, dirty:true});
-      statusText(!navigator.onLine || s.needsAccessCheck ? pendingSync() : "حُفظ على الجهاز • بانتظار المزامنة");
+      setSync("pending");
       schedule(s);
     }
   };
@@ -168,7 +191,7 @@ function showConflict(s, head, remote) {
 async function reconcile(s) {
   if (s !== session || s.conflict) return;
   if (!navigator.onLine || s.needsAccessCheck) {
-    if (!s.storageError) schedulePendingStatus(s);
+    if (!s.storageError) setSync("pending");
     return;
   }
   if (s.busy) { s.again = true; return; }
@@ -194,8 +217,8 @@ async function reconcile(s) {
       if (s.record.dirty) await push(s);
     }
     if (s === session) {
-      statusText(s.record.dirty ? "بانتظار المزامنة…" : "saved");
-      if (s.record.dirty) schedule(s);
+      if (!s.record.dirty) setSync("saved");
+      else { setSync("pending"); schedule(s); }
     }
   } catch (error) {
     if (s !== session) return;
@@ -205,7 +228,7 @@ async function reconcile(s) {
     else if (error.message === "invalid-ledger" || error instanceof SyntaxError) statusText(t("Could not read the saved ledger. Check its backup before editing.", "تعذّرت قراءة الدفتر المحفوظ. راجع نسخته الاحتياطية قبل التعديل."));
     else if (error.message === "ledger-too-large") statusText("تجاوز الدفتر حد المزامنة. صدّر نسخة احتياطية قبل تقليل حجمه.");
     else {
-      if (s.open) schedulePendingStatus(s);
+      if (s.open) setSync("pending");
       else statusText(cacheNotice());
       schedule(s, 12000);
     }
@@ -232,7 +255,7 @@ async function enter(user, branchId, ticket) {
       if (snap.metadata.fromCache) {
         if (s.open) {
           s.needsAccessCheck = true;
-          if (!s.storageError && !s.conflict) schedulePendingStatus(s);
+          if (!s.storageError && !s.conflict) setSync("pending");
         }
       } else if (!snap.metadata.hasPendingWrites) {
         if (s.needsAccessCheck) void checkSession();
@@ -298,7 +321,7 @@ let adminMode = false, profileName = "", invite, ready;
 const owned = new Map(), stores = new Map(), invitations = new Map(), legacyAccess = new Map();
 
 function closeLedger() {
-  clearPendingTimer();
+  resetSync();
   ++generation;
   const old = session;
   session = null;
@@ -847,7 +870,7 @@ document.addEventListener("tracker-language", () => {
   const storePrompt = byId("activeBranch").options[0];
   if (storePrompt) storePrompt.textContent = t("Switch store", "تبديل المحل");
   renderPanel();
-  if (syncStatus === "saved") statusText("saved");
+  if (syncState === "pending") byId("status").textContent = pendingSync();
 });
 
 byId("inviteOwner").onsubmit = async event => {
@@ -957,7 +980,7 @@ byId("nameForm").onsubmit = async event => {
 window.addEventListener("offline", () => {
   if (session) {
     session.needsAccessCheck = true;
-    if (!session.storageError && !session.conflict) statusText(pendingSync());
+    if (!session.storageError && !session.conflict) setSync("pending");
   } else message(cacheNotice());
 });
 window.addEventListener("online", () => {
