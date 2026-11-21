@@ -2,12 +2,29 @@
 const byId = id => document.getElementById(id);
 const gate = byId("gate"), workspace = byId("workspace"), frame = byId("ledger");
 let syncStatus;
+let pendingTimer;
+
+function clearPendingTimer() {
+  clearTimeout(pendingTimer);
+  pendingTimer = null;
+}
+
 const statusText = value => {
+  clearPendingTimer();
+  const isPendingSync =
+    value === pendingSync() ||
+    value === "Waiting for connection to sync" ||
+    value === "بانتظار الاتصال للمزامنة" ||
+    value === "بانتظار المزامنة…";
+  if (isPendingSync) return;
   syncStatus = value;
   const saved = syncStatus === "saved";
   byId("status").textContent = saved ? t("Saved to cloud", "تمت المزامنة") : value;
   byId("retry").hidden = !session || saved;
 };
+
+function schedulePendingStatus() {}
+
 const message = value => { byId("message").textContent = value; };
 const config = window.firebaseConfig;
 const prefix = "daily-tracker:" + location.pathname.replace(/index\.html$/, "") + ":" + config.projectId + ":";
@@ -151,7 +168,7 @@ function showConflict(s, head, remote) {
 async function reconcile(s) {
   if (s !== session || s.conflict) return;
   if (!navigator.onLine || s.needsAccessCheck) {
-    if (!s.storageError) statusText(pendingSync());
+    if (!s.storageError) schedulePendingStatus(s);
     return;
   }
   if (s.busy) { s.again = true; return; }
@@ -188,7 +205,8 @@ async function reconcile(s) {
     else if (error.message === "invalid-ledger" || error instanceof SyntaxError) statusText(t("Could not read the saved ledger. Check its backup before editing.", "تعذّرت قراءة الدفتر المحفوظ. راجع نسخته الاحتياطية قبل التعديل."));
     else if (error.message === "ledger-too-large") statusText("تجاوز الدفتر حد المزامنة. صدّر نسخة احتياطية قبل تقليل حجمه.");
     else {
-      statusText(s.open ? pendingSync() : cacheNotice());
+      if (s.open) schedulePendingStatus(s);
+      else statusText(cacheNotice());
       schedule(s, 12000);
     }
   } finally {
@@ -214,7 +232,7 @@ async function enter(user, branchId, ticket) {
       if (snap.metadata.fromCache) {
         if (s.open) {
           s.needsAccessCheck = true;
-          if (!s.storageError && !s.conflict) statusText(pendingSync());
+          if (!s.storageError && !s.conflict) schedulePendingStatus(s);
         }
       } else if (!snap.metadata.hasPendingWrites) {
         if (s.needsAccessCheck) void checkSession();
@@ -280,6 +298,7 @@ let adminMode = false, profileName = "", invite, ready;
 const owned = new Map(), stores = new Map(), invitations = new Map(), legacyAccess = new Map();
 
 function closeLedger() {
+  clearPendingTimer();
   ++generation;
   const old = session;
   session = null;
@@ -722,7 +741,6 @@ async function revokeEmailAccess(address) {
   for (const id of [...invitations.keys(), ...legacyAccess.keys()]) {
     if (id.trim().toLowerCase() === email) addresses.add(id);
   }
-  // All grant removals commit together, including legacy case variants.
   const batch = db.batch();
   for (const id of addresses) {
     batch.delete(inviteRef(id));
@@ -730,8 +748,6 @@ async function revokeEmailAccess(address) {
   }
   await batch.commit();
 }
-// Reload the Auth record independently of the ledger. A transient network failure
-// must not turn into a revocation or interrupt an in-progress edit.
 async function validateIdentity(user, expected, initial) {
   try {
     await user.reload();
@@ -788,7 +804,6 @@ async function checkSession(manual = false) {
             deny("permission-denied"); return;
           }
         }
-        // This server read also checks store ownership and ledger permissions.
         await ledger.ref.get({source:"server"});
         if (session !== ledger || sessionIdentity !== expected || !navigator.onLine) return;
         ledger.needsAccessCheck = false;
