@@ -1,10 +1,11 @@
 "use strict";
 const byId = id => document.getElementById(id);
 const gate = byId("gate"), workspace = byId("workspace"), frame = byId("ledger");
+let syncStatus;
 const statusText = value => {
-  const saved = value === "تمت المزامنة";
-  byId("status").textContent = saved ? t("Saved to cloud", value) : value;
-  byId("status").dataset.saved = String(saved);
+  syncStatus = value;
+  const saved = syncStatus === "saved";
+  byId("status").textContent = saved ? t("Saved to cloud", "تمت المزامنة") : value;
   byId("retry").hidden = !session || saved;
 };
 const message = value => { byId("message").textContent = value; };
@@ -176,7 +177,7 @@ async function reconcile(s) {
       if (s.record.dirty) await push(s);
     }
     if (s === session) {
-      statusText(s.record.dirty ? "بانتظار المزامنة…" : "تمت المزامنة");
+      statusText(s.record.dirty ? "بانتظار المزامنة…" : "saved");
       if (s.record.dirty) schedule(s);
     }
   } catch (error) {
@@ -831,7 +832,7 @@ document.addEventListener("tracker-language", () => {
   const storePrompt = byId("activeBranch").options[0];
   if (storePrompt) storePrompt.textContent = t("Switch store", "تبديل المحل");
   renderPanel();
-  if (byId("status").dataset.saved === "true") statusText("تمت المزامنة");
+  if (syncStatus === "saved") statusText("saved");
 });
 
 byId("inviteOwner").onsubmit = async event => {

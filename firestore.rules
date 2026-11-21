@@ -176,10 +176,14 @@ service cloud.firestore {
           && request.resource.data.revision is string && request.resource.data.parts is int
           && request.resource.data.parts >= 1 && request.resource.data.parts <= 160;
         match /parts/{part} {
+          function validPart(data) {
+            return part.matches('^([0-9]|[1-9][0-9]|1[0-5][0-9])$')
+              && data.keys().hasOnly(['text','revision'])
+              && data.text is string && data.text.size() <= 60000
+              && data.revision is string;
+          }
           allow read, delete: if accessStore(id);
-          allow create, update: if accessStore(id)
-            && request.resource.data.keys().hasOnly(['text','revision'])
-            && request.resource.data.text is string && request.resource.data.revision is string;
+          allow create, update: if accessStore(id) && validPart(request.resource.data);
         }
       }
     }
