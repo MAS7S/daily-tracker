@@ -1,6 +1,6 @@
 window.firebaseConfig = {
   apiKey: "AIzaSyCB347V06ZNqCqwUMhhmulm05Q7aagxzHE",
-  authDomain: "daily-income-tracking.firebaseapp.com",
+  authDomain: "daily-income-tracking.web.app",
   projectId: "daily-income-tracking",
   storageBucket: "daily-income-tracking.firebasestorage.app",
   messagingSenderId: "1071741399751",
