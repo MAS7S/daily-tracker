@@ -261,8 +261,6 @@ function init() {
   auth.onAuthStateChanged(user => { if (!emailLinkPending) void startAccess(user); });
 
 }
-const pendingDeletions = new Set();
-const revocationUrl = window.dailyTrackerRevocationUrl;
 const ADMIN = "malekshahbien@gmail.com";
 const emailOf = user => (user?.email || "").trim().toLowerCase();
 const accessRef = email => db.collection("access").doc(email);
@@ -276,7 +274,6 @@ let emailLinkPending = false;
 let generation = 0, identity = 0, wanted = "";
 let listeners = [];
 let sessionIdentity, checkingSession, retryAccess = false;
-let auditingGrants = false, lastGrantAudit = 0;
 let profileReady = false;
 let adminMode = false, profileName = "", invite, ready;
 const owned = new Map(), stores = new Map(), invitations = new Map(), legacyAccess = new Map();
@@ -374,7 +371,6 @@ function renderPanel() {
     if (email.toLowerCase() !== ADMIN) entries.set(email, approval);
   }
 
-  for (const email of pendingDeletions) entries.set(email, { deletionPending: true });
   for (const [email, approval] of entries) {
     const verifiedUser = activeApproval(approval) && Boolean(approval.accountUid)
       && approval.accountConfirmed === true && !approval.legacy;
@@ -430,11 +426,11 @@ function renderPanel() {
 
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = approval.deletionPending ? t("Finish account deletion", "إكمال حذف الحساب") : t("Revoke access", "إلغاء الوصول");
+    button.textContent = t("Revoke access", "إلغاء الوصول");
     button.setAttribute("aria-label", t("Revoke access for ", "إلغاء الوصول لـ ") + email);
     button.setAttribute("data-revoke", "");
     button.onclick = async () => {
-      if (button.disabled || !window.confirm((revocationUrl ? t("Revoke access and permanently delete the sign-in account for ", "إلغاء الوصول وحذف حساب تسجيل الدخول نهائيًا لـ ") : t("Revoke access for ", "إلغاء الوصول لـ ")) + email + "?")) return;
+      if (button.disabled || !window.confirm(t("Revoke access for ", "إلغاء الوصول لـ ") + email + "?")) return;
       button.disabled = true;
       try {
         if (await adminAction(() => revokeEmailAccess(email))) {
@@ -548,8 +544,6 @@ async function startAccess(user) {
   sessionIdentity = user ? {uid:user.uid, email:emailOf(user), verified:user.emailVerified} : null;
   checkingSession = null;
   retryAccess = false;
-  lastGrantAudit = 0;
-  pendingDeletions.clear();
   workspace.inert = false;
   listeners.forEach(stop => stop());
   listeners = [];
@@ -638,17 +632,11 @@ async function startAccess(user) {
   try {
     if (adminMode) {
       watchOwned();
-      if (revocationUrl) listeners.push(listen(db.collection("accessRevocations"), snap => {
-        pendingDeletions.clear();
-        snap.forEach(doc => pendingDeletions.add(doc.id));
-        renderPanel();
-      }, error => console.error("Could not load pending account deletions", error.code)));
       listeners.push(listen(db.collection("ownerInvites"), snap => {
         invitations.clear();
         snap.forEach(doc => invitations.set(doc.id, doc.data()));
         invitationsStatus = "ready";
         renderPanel();
-        void auditBoundGrants();
       }, () => {
         invitations.clear();
         invitationsStatus = "failed";
@@ -733,17 +721,13 @@ async function revokeEmailAccess(address) {
   for (const id of [...invitations.keys(), ...legacyAccess.keys()]) {
     if (id.trim().toLowerCase() === email) addresses.add(id);
   }
-  if (!revocationUrl) throw Error(t("Account deletion is unavailable.", "خدمة حذف الحساب غير متاحة."));
-  const token = await auth.currentUser.getIdToken(true);
-  const response = await fetch(revocationUrl + "/revoke-confirmed", {
-    method: "POST", redirect: "error",
-    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({email, addresses: [...addresses]})
-  });
-  const result = await response.json().catch(() => null);
-  if (!response.ok || result?.accountAbsent !== true) {
-    throw Error(t("Account deletion could not be confirmed. Try again.", "تعذّر تأكيد حذف الحساب. أعد المحاولة."));
+  // All grant removals commit together, including legacy case variants.
+  const batch = db.batch();
+  for (const id of addresses) {
+    batch.delete(inviteRef(id));
+    batch.delete(accessRef(id));
   }
+  await batch.commit();
 }
 // Reload the Auth record independently of the ledger. A transient network failure
 // must not turn into a revocation or interrupt an in-progress edit.
@@ -771,35 +755,6 @@ async function validateIdentity(user, expected, initial) {
       message(cacheNotice());
     }
     return false;
-  }
-}
-
-async function auditBoundGrants() {
-  if (!revocationUrl || !adminMode || invitationsStatus !== "ready" || auditingGrants
-      || !navigator.onLine || document.hidden || Date.now() - lastGrantAudit < 300000) return;
-  const user = auth.currentUser;
-  const epoch = identity;
-  if (!user) return;
-  auditingGrants = true;
-  lastGrantAudit = Date.now();
-  try {
-    const token = await user.getIdToken();
-    for (const [address, approval] of [...invitations]) {
-      if (epoch !== identity) return;
-      if (!activeApproval(approval) || !approval.accountUid) continue;
-      const email = address.trim().toLowerCase();
-      const aliases = [...new Set([email, address, ...[...legacyAccess.keys()].filter(id => id.trim().toLowerCase() === email)])];
-      const response = await fetch(revocationUrl + "/reconcile-access", {
-        method:"POST", redirect:"error",
-        headers:{Authorization:"Bearer " + token, "Content-Type":"application/json"},
-        body:JSON.stringify({email, addresses:aliases})
-      });
-      if (!response.ok) throw Error("Access reconciliation returned " + response.status);
-    }
-  } catch (error) {
-    console.warn("Could not reconcile account approvals.", error.message);
-  } finally {
-    auditingGrants = false;
   }
 }
 
@@ -843,7 +798,6 @@ async function checkSession(manual = false) {
       }
     }
     if (manual && ready && !session) await refreshView();
-    void auditBoundGrants();
   } finally {
     if (checkingSession === expected) checkingSession = null;
   }
@@ -868,7 +822,6 @@ function openAccessPanel(mode) {
   byId("adminMessage").textContent = "";
   renderPanel();
   byId("adminPanel").showModal();
-  if (mode === "list") void auditBoundGrants();
 }
 byId("share").onclick = () => openAccessPanel("grant");
 byId("authorized").onclick = () => openAccessPanel("list");

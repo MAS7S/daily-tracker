@@ -1,0 +1,38 @@
+name: Deploy Daily Tracker to Firebase Hosting
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-tracker-hosting-live
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Deploy live Hosting site
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -eu
+          umask 077
+          export GOOGLE_APPLICATION_CREDENTIALS="$(mktemp "$RUNNER_TEMP/firebase-XXXXXX.json")"
+          trap 'rm -f "$GOOGLE_APPLICATION_CREDENTIALS"' EXIT
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          unset FIREBASE_SERVICE_ACCOUNT
+          npx --yes firebase-tools@15.37.0 deploy --only hosting --project daily-income-tracking --non-interactive

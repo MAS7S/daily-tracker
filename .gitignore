@@ -1,2 +1,5 @@
 
 .wrangler/
+.hosting-build/
+.firebase/
+firebase-debug*.log

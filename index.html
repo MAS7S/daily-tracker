@@ -3,6 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <script>
+    // Old installations can still open their original origin to sync local drafts.
+    if (location.origin === "https://mas7s.github.io" && navigator.onLine &&
+        /^\/daily-tracker\/(index\.html)?$/.test(location.pathname)) {
+      try {
+        const draftPrefix = "daily-tracker:/daily-tracker/:daily-income-tracking:";
+        const hasDraft = Object.keys(localStorage).some(key => key.startsWith(draftPrefix));
+        if (!hasDraft) location.replace("https://daily-income-tracking.web.app/" + location.search + location.hash);
+      } catch { /* Stay on the original origin if draft storage cannot be checked. */ }
+    }
+  </script>
   <meta name="theme-color" content="#10B981">
   <meta name="application-name" content="Daily Tracker">
   <meta name="mobile-web-app-capable" content="yes">
@@ -260,7 +271,6 @@
   <script defer src="./vendor/firebase-auth-compat.js"></script>
   <script defer src="./vendor/firebase-firestore-compat.js"></script>
   <script defer src="./firebase-config.js"></script>
-  <script defer src="./revocation-config.js"></script>
   <script defer src="./cloud.js"></script>
 </head>
 

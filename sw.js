@@ -7,7 +7,6 @@ const files = [
   "tracker.html",
   "manifest.json",
   "firebase-config.js",
-  "revocation-config.js",
   "cloud.js",
   "vendor/firebase-app-compat.js",
   "vendor/firebase-auth-compat.js",
