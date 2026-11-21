@@ -4,7 +4,7 @@
 
 رابط التطبيق هو [Daily Tracker](https://daily-income-tracking.web.app/). يستخدم التطبيق مشروع Firebase الحالي `daily-income-tracking` وقاعدة Firestore نفسها.
 
-كل تحديث للفرع `main` يشغّل `.github/workflows/firebase-hosting-merge.yml`. يجهّز `prepare-hosting.cjs` ملفات الواجهة في `.hosting-build` وتنشرها مهمة GitHub Actions باستخدام السر `FIREBASE_SERVICE_ACCOUNT`. تنشر مهمة القواعد الحالية تحديثات `firestore.rules` بصورة مستقلة.
+كل تحديث للفرع `main` يشغّل `.github/workflows/firebase-hosting-merge.yml`. يجهّز `prepare-hosting.cjs` ملفات الواجهة في `.hosting-build` وتنشرها مهمة GitHub Actions باستخدام السر `FIREBASE_SERVICE_ACCOUNT`. عند تغيير `firestore.rules` على `main`، تنشرها مهمة `.github/workflows/firebase-deploy.yml` بصورة مستقلة. تستخدم هذه المهمة `google-github-actions/auth` للمصادقة باستخدام مفتاح حساب الخدمة بصيغة JSON من السر نفسه `FIREBASE_SERVICE_ACCOUNT`. يجب أن يملك حساب الخدمة صلاحيات نشر الاستضافة وإدارة قواعد Firebase في مشروع `daily-income-tracking`.
 
 للمعاينة محليًا، شغّل `node prepare-hosting.cjs` ثم `npx firebase-tools emulators:start --only hosting`. تستخدم هذه المعاينة إعدادات المصادقة وقاعدة البيانات المحددة في `firebase-config.js`.
 

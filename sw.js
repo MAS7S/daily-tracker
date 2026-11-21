@@ -1,6 +1,6 @@
 const SCOPE = self.registration.scope;
 const PREFIX = "daily-tracker/" + SCOPE + "/";
-const CACHE = PREFIX + "core";
+const CACHE = PREFIX + "v1";
 
 const files = [
   "index.html",
